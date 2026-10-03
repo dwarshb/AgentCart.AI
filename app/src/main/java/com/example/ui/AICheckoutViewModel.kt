@@ -4,24 +4,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.OrderHistoryRepository
 import com.example.data.OrderRecord
-import com.example.data.SampleCatalog
 import com.example.network.DiscoveredProduct
 import com.example.network.NetworkClient
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.UUID
+import org.json.JSONObject
+import retrofit2.HttpException
 
 sealed class AICheckoutUiState {
     object Idle : AICheckoutUiState()
-    data class ProcessingAI(val statusMessage: String = "Gemini Vision processing layout fields...") : AICheckoutUiState()
+    data class ProcessingAI(val statusMessage: String = "Uploading to Gemini 2.5 Flash Vision...") : AICheckoutUiState()
     data class ReviewMatch(
         val product: DiscoveredProduct,
-        val source: String = "Gemini Vision Multimodal Pipeline"
+        val source: String = "Gemini 2.5 Flash Multimodal Vision"
     ) : AICheckoutUiState()
     object ExecutingPayment : AICheckoutUiState()
     data class Success(
@@ -36,7 +35,6 @@ class AICheckoutViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<AICheckoutUiState>(AICheckoutUiState.Idle)
     val uiState: StateFlow<AICheckoutUiState> = _uiState.asStateFlow()
 
-    // Configurable backend URL
     private val _backendUrl = MutableStateFlow(NetworkClient.baseUrl)
     val backendUrl: StateFlow<String> = _backendUrl.asStateFlow()
 
@@ -56,94 +54,80 @@ class AICheckoutViewModel : ViewModel() {
         _useSandboxFallback.value = enabled
     }
 
+    private fun extractErrorMessage(e: Exception): String {
+        if (e is HttpException) {
+            val code = e.code()
+            val errorBody = e.response()?.errorBody()?.string()
+            if (!errorBody.isNullOrBlank()) {
+                try {
+                    val json = JSONObject(errorBody)
+                    if (json.has("error")) {
+                        return "[HTTP $code] ${json.getString("error")}"
+                    }
+                    if (json.has("message")) {
+                        return "[HTTP $code] ${json.getString("message")}"
+                    }
+                } catch (_: Exception) {
+                    return "[HTTP $code] $errorBody"
+                }
+            }
+            return "Server returned HTTP $code: ${e.message()}"
+        }
+        return e.localizedMessage ?: e.message ?: "Unknown communication failure"
+    }
+
     /**
-     * Primary Blueprint pipeline method: analyzes image bytes with Gemini Vision
+     * Sends captured image bytes to Gemini 2.5 Flash Vision on Render backend
      */
-    fun analyzeImageWithAIAgent(imageBytes: ByteArray, fallbackHint: DiscoveredProduct? = null) {
+    fun analyzeImageWithAIAgent(imageBytes: ByteArray) {
+        if (imageBytes.isEmpty()) {
+            _uiState.value = AICheckoutUiState.Error(
+                "No camera feed detected. Please allow camera access or use 'Pick Photo' to select an image from your device."
+            )
+            return
+        }
+
         viewModelScope.launch {
-            _uiState.value = AICheckoutUiState.ProcessingAI("Gemini Vision processing layout fields...")
+            _uiState.value = AICheckoutUiState.ProcessingAI("Uploading image to Google Gemini 2.5 Flash Vision...")
             try {
-                // If backend URL is live and not placeholder, attempt network call
-                val isCustomBackend = !_backendUrl.value.contains("your-agentcart-backend.onrender.com")
-                if (isCustomBackend && imageBytes.isNotEmpty()) {
-                    val requestBody = imageBytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
-                    val product = NetworkClient.api.analyzeImage(requestBody)
-                    _selectedProduct.value = product
-                    _uiState.value = AICheckoutUiState.ReviewMatch(product, source = "Render AI Endpoint")
-                } else {
-                    // Demo simulation / fallback for instant hackathon testing in AI Studio emulator
-                    delay(1400) // Realistic Gemini Vision inference latency
-                    _uiState.value = AICheckoutUiState.ProcessingAI("Channel3 verifying real-time inventory & pricing...")
-                    delay(800)
-                    val resolved = fallbackHint ?: SampleCatalog.items.first()
-                    _selectedProduct.value = resolved
-                    _uiState.value = AICheckoutUiState.ReviewMatch(
-                        product = resolved,
-                        source = if (isCustomBackend) "Render AI Backend" else "Channel3 Marketplace Node"
-                    )
-                }
+                val requestBody = imageBytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
+                val product = NetworkClient.api.analyzeImage(requestBody)
+                _selectedProduct.value = product
+                _uiState.value = AICheckoutUiState.ReviewMatch(
+                    product = product,
+                    source = "Gemini 2.5 Flash Vision"
+                )
             } catch (e: Exception) {
-                // Fallback to offline catalog item if configured to avoid deadlocks in hackathon demos
-                if (_useSandboxFallback.value) {
-                    val resolved = fallbackHint ?: SampleCatalog.items.first()
-                    _selectedProduct.value = resolved
-                    _uiState.value = AICheckoutUiState.ReviewMatch(
-                        product = resolved,
-                        source = "Sandbox Intelligent Node (Backend offline fallback)"
-                    )
-                } else {
-                    _uiState.value = AICheckoutUiState.Error("AI pipeline analysis failed: ${e.localizedMessage ?: e.message}")
-                }
+                val errorDetails = extractErrorMessage(e)
+                _uiState.value = AICheckoutUiState.Error(
+                    "Product Scan Failed: $errorDetails"
+                )
             }
         }
     }
 
     /**
-     * Triggers analysis directly from a catalog item (ideal for testing in emulator)
-     */
-    fun analyzeCatalogItem(item: DiscoveredProduct) {
-        analyzeImageWithAIAgent(ByteArray(0), fallbackHint = item)
-    }
-
-    /**
-     * Blueprint payment execution method
+     * Executes real PayPal order capture via Render backend
      */
     fun executePayPalPayment(productId: String) {
-        val currentProduct = _selectedProduct.value ?: SampleCatalog.items.find { it.id == productId } ?: SampleCatalog.items.first()
+        val currentProduct = _selectedProduct.value
+        if (currentProduct == null) {
+            _uiState.value = AICheckoutUiState.Error("No scanned product selected for payment.")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = AICheckoutUiState.ExecutingPayment
             try {
-                val isCustomBackend = !_backendUrl.value.contains("your-agentcart-backend.onrender.com")
-                if (isCustomBackend) {
-                    val response = NetworkClient.api.executePayment(
-                        mapOf(
-                            "productId" to productId,
-                            "productTitle" to currentProduct.title,
-                            "price" to currentProduct.price
-                        )
+                val response = NetworkClient.api.executePayment(
+                    mapOf(
+                        "productId" to productId,
+                        "productTitle" to currentProduct.title,
+                        "price" to currentProduct.price
                     )
-                    if (response.status == "COMPLETED") {
-                        val record = OrderRecord(
-                            orderId = response.transactionId.ifEmpty { "PP-CAPT-${UUID.randomUUID().toString().take(8).uppercase()}" },
-                            product = currentProduct,
-                            status = "COMPLETED",
-                            paymentMethod = "PayPal Biometric 1-Click"
-                        )
-                        OrderHistoryRepository.addOrder(record)
-                        _uiState.value = AICheckoutUiState.Success(
-                            transactionId = record.orderId,
-                            product = currentProduct,
-                            zapierTriggered = true
-                        )
-                    } else {
-                        _uiState.value = AICheckoutUiState.Error("Payment verification failed on PayPal sandbox server.")
-                    }
-                } else {
-                    // Direct Sandbox execution using configured PayPal credentials
-                    val response = com.example.network.PayPalSandboxClient.createAndCaptureOrder(
-                        productTitle = currentProduct.title,
-                        priceString = currentProduct.price
-                    )
+                )
+
+                if (response.status == "COMPLETED") {
                     val record = OrderRecord(
                         orderId = response.transactionId,
                         product = currentProduct,
@@ -156,29 +140,16 @@ class AICheckoutViewModel : ViewModel() {
                         product = currentProduct,
                         zapierTriggered = true
                     )
+                } else {
+                    _uiState.value = AICheckoutUiState.Error(
+                        "PayPal Payment Incomplete. Status returned: ${response.status}"
+                    )
                 }
             } catch (e: Exception) {
-                if (e is com.example.network.PayPalApiException) {
-                    // Real PayPal API error (authentication failure, invalid secret, etc.)
-                    _uiState.value = AICheckoutUiState.Error(e.message ?: "PayPal Sandbox API error")
-                } else if (_useSandboxFallback.value) {
-                    // Only fallback for non-auth network errors if user explicitly turned fallback on
-                    val mockOrderId = "SANDBOX-PP-${UUID.randomUUID().toString().take(10).uppercase()}"
-                    val record = OrderRecord(
-                        orderId = mockOrderId,
-                        product = currentProduct,
-                        status = "COMPLETED",
-                        paymentMethod = "PayPal Sandbox Ledger (Demo Fallback)"
-                    )
-                    OrderHistoryRepository.addOrder(record)
-                    _uiState.value = AICheckoutUiState.Success(
-                        transactionId = mockOrderId,
-                        product = currentProduct,
-                        zapierTriggered = true
-                    )
-                } else {
-                    _uiState.value = AICheckoutUiState.Error("PayPal API connection error: ${e.localizedMessage ?: e.message}")
-                }
+                val errorDetails = extractErrorMessage(e)
+                _uiState.value = AICheckoutUiState.Error(
+                    "PayPal API Connection Error: $errorDetails"
+                )
             }
         }
     }

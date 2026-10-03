@@ -2,11 +2,7 @@ package com.example.ui.components
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.net.Uri
-import java.io.ByteArrayOutputStream
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -28,7 +24,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,28 +33,20 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -80,25 +67,20 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.R
-import com.example.data.SampleCatalog
-import com.example.network.DiscoveredProduct
 import com.example.ui.theme.AccentSuccess
-import com.example.ui.theme.PayPalBlue
 import com.example.ui.theme.PayPalLightBlue
 import com.example.ui.theme.PayPalNavy
 import java.io.File
 
 @Composable
 fun CameraScannerView(
-    onImageCaptured: (ByteArray, DiscoveredProduct?) -> Unit,
-    onOpenSamplePicker: () -> Unit,
+    onImageCaptured: (ByteArray) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -127,15 +109,14 @@ fun CameraScannerView(
                 val inputStream = context.contentResolver.openInputStream(it)
                 val bytes = inputStream?.readBytes() ?: ByteArray(0)
                 inputStream?.close()
-                onImageCaptured(bytes, null)
+                onImageCaptured(bytes)
             } catch (_: Exception) {
-                onImageCaptured(ByteArray(0), null)
+                onImageCaptured(ByteArray(0))
             }
         }
     }
 
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
-    var activeSimulationTarget by remember { mutableStateOf("Sony WH-1000XM5") }
 
     val infiniteTransition = rememberInfiniteTransition(label = "scanner_laser")
     val laserOffset by infiniteTransition.animateFloat(
@@ -155,7 +136,7 @@ fun CameraScannerView(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Banner card showcasing high-tech integration
+        // Banner card showcasing integration status
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -195,47 +176,46 @@ fun CameraScannerView(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "GEMINI VISION + PAYPAL 1-CLICK LIVE",
+                        text = "GEMINI 2.5 FLASH VISION SCANNER",
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
+                        letterSpacing = 0.6.sp
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // Central Scanner Viewfinder Card
+        // Live Camera Viewfinder Box
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(280.dp)
+                .height(310.dp)
+                .testTag("camera_viewfinder_card"),
+            colors = CardDefaults.cardColors(containerColor = Color.Black),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (hasCameraPermission) {
                     AndroidView(
                         factory = { ctx ->
-                            val previewView = PreviewView(ctx).apply {
-                                scaleType = PreviewView.ScaleType.FILL_CENTER
-                            }
+                            val previewView = PreviewView(ctx)
                             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                             cameraProviderFuture.addListener({
                                 try {
                                     val cameraProvider = cameraProviderFuture.get()
                                     val preview = Preview.Builder().build().also {
-                                        it.surfaceProvider = previewView.surfaceProvider
+                                        it.setSurfaceProvider(previewView.surfaceProvider)
                                     }
                                     val capture = ImageCapture.Builder()
                                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                                         .build()
                                     imageCapture = capture
-
                                     val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
                                     cameraProvider.unbindAll()
                                     cameraProvider.bindToLifecycle(
                                         lifecycleOwner,
@@ -244,7 +224,7 @@ fun CameraScannerView(
                                         capture
                                     )
                                 } catch (_: Exception) {
-                                    // Fallback to simulated feed if camera hardware absent
+                                    // Camera unavailable in current hardware container
                                 }
                             }, ContextCompat.getMainExecutor(ctx))
                             previewView
@@ -252,7 +232,6 @@ fun CameraScannerView(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    // High-tech Simulated Viewfinder for Emulator Testing
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -270,52 +249,63 @@ fun CameraScannerView(
                             Surface(
                                 shape = CircleShape,
                                 color = PayPalNavy.copy(alpha = 0.5f),
-                                modifier = Modifier.size(68.dp)
+                                modifier = Modifier.size(64.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         Icons.Default.CameraAlt,
                                         contentDescription = null,
                                         tint = PayPalLightBlue,
-                                        modifier = Modifier.size(34.dp)
+                                        modifier = Modifier.size(32.dp)
                                     )
                                 }
                             }
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "AI Viewfinder Active",
+                                text = "Camera Ready for Real Scanning",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
+                                fontSize = 15.sp
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Point at item or test with sample products below",
+                                text = "Tap below to grant camera access or choose an image file from your device",
                                 color = Color.LightGray,
                                 fontSize = 12.sp,
                                 textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color.White.copy(alpha = 0.12f),
+                                color = PayPalLightBlue.copy(alpha = 0.2f),
                                 modifier = Modifier.clickable {
                                     permissionLauncher.launch(Manifest.permission.CAMERA)
                                 }
                             ) {
-                                Text(
-                                    text = "Enable Physical Camera",
-                                    color = PayPalLightBlue,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Security,
+                                        contentDescription = null,
+                                        tint = PayPalLightBlue,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Enable Camera Permission",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                // Laser Scanning Reticle Overlay
+                // Laser Scanning Overlay
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -342,9 +332,9 @@ fun CameraScannerView(
                     )
                 }
 
-                // Top Status Badge
+                // Top Badge
                 Surface(
-                    color = Color.Black.copy(alpha = 0.65f),
+                    color = Color.Black.copy(alpha = 0.7f),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -373,59 +363,9 @@ fun CameraScannerView(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
-        // Live Lens Target Subject Selector (for emulator testing without physical webcam)
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Subject in Viewfinder Lens:",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = activeSimulationTarget,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PayPalBlue
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                val targets = listOf("Sony WH-1000XM5", "Apple Watch Ultra", "Logitech MX Master 3S", "DJI Mini 4 Drone", "Anker Prime 65W")
-                items(targets) { target ->
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (activeSimulationTarget == target) PayPalNavy else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.clickable { activeSimulationTarget = target }
-                    ) {
-                        Text(
-                            text = target,
-                            fontSize = 11.sp,
-                            fontWeight = if (activeSimulationTarget == target) FontWeight.Bold else FontWeight.Normal,
-                            color = if (activeSimulationTarget == target) Color.White else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Main Primary Action: Blueprint "Snapshot Object" Button
+        // Main Primary Action: Snapshot Object Button
         Button(
             onClick = {
                 val capture = imageCapture
@@ -440,23 +380,20 @@ fun CameraScannerView(
                             object : ImageCapture.OnImageSavedCallback {
                                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                                     val bytes = photoFile.readBytes()
-                                    onImageCaptured(bytes, null)
+                                    onImageCaptured(bytes)
                                 }
 
                                 override fun onError(exception: ImageCaptureException) {
-                                    val fallbackBytes = generateSyntheticProductPhoto(activeSimulationTarget)
-                                    onImageCaptured(fallbackBytes, null)
+                                    onImageCaptured(ByteArray(0))
                                 }
                             }
                         )
                     } catch (_: Exception) {
-                        val fallbackBytes = generateSyntheticProductPhoto(activeSimulationTarget)
-                        onImageCaptured(fallbackBytes, null)
+                        onImageCaptured(ByteArray(0))
                     }
                 } else {
-                    // Feed real synthetic JPEG stream to Render Gemini 2.5 Flash
-                    val fallbackBytes = generateSyntheticProductPhoto(activeSimulationTarget)
-                    onImageCaptured(fallbackBytes, null)
+                    // Triggers actual error screen indicating camera status
+                    onImageCaptured(ByteArray(0))
                 }
             },
             shape = RoundedCornerShape(18.dp),
@@ -476,196 +413,54 @@ fun CameraScannerView(
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Secondary controls: Gallery upload & Full catalog
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        // Pick Photo from device storage
+        OutlinedButton(
+            onClick = { photoPickerLauncher.launch("image/*") },
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .testTag("gallery_picker_button")
         ) {
-            OutlinedButton(
-                onClick = { photoPickerLauncher.launch("image/*") },
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(46.dp)
-                    .testTag("gallery_picker_button")
-            ) {
-                Icon(
-                    Icons.Default.PhotoLibrary,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = PayPalNavy
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Pick Photo", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
-
-            OutlinedButton(
-                onClick = onOpenSamplePicker,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(46.dp)
-                    .testTag("open_catalog_button")
-            ) {
-                Icon(
-                    Icons.Default.ShoppingBag,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = PayPalBlue
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Browse Catalog", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // "Instant Demo Products" Section for One-Tap Emulator Testing
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.TouchApp,
-                    contentDescription = null,
-                    tint = PayPalNavy,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Tap to Test AI Discovery",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            Icon(
+                Icons.Default.PhotoLibrary,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = PayPalNavy
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Emulator Ready",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = AccentSuccess
+                text = "Pick Photo from Device",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Horizontal Carousel of demo gadgets
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(vertical = 4.dp)
+        // Informational Helper Card
+        Card(
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            items(SampleCatalog.items) { item ->
-                Card(
-                    modifier = Modifier
-                        .width(180.dp)
-                        .clickable { onImageCaptured(generateSyntheticProductPhoto(item.title), item) }
-                        .testTag("demo_item_${item.id}"),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = PayPalNavy.copy(alpha = 0.08f)
-                            ) {
-                                Text(
-                                    text = item.category ?: "Tech",
-                                    fontSize = 10.sp,
-                                    color = PayPalNavy,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                            Text(
-                                text = item.price,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Black,
-                                color = PayPalNavy
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = item.title,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = item.merchantName,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = AccentSuccess,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = "Scan & Buy",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = AccentSuccess
-                            )
-                        }
-                    }
-                }
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "Live Multimodal Flow",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "• Snapshots and picked photos stream directly to Gemini 2.5 Flash on Render.\n• If no product is recognized or if an API key fails, an exact error message will be displayed.\n• No dummy or fallback data is used.",
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
-}
-
-/**
- * Creates high-contrast JPEG bytes for emulator testing to feed into Google Gemini 2.5 Flash Vision
- */
-fun generateSyntheticProductPhoto(targetName: String): ByteArray {
-    val bmp = Bitmap.createBitmap(480, 360, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bmp)
-    canvas.drawColor(android.graphics.Color.rgb(15, 23, 42)) // dark slate background
-    val paint = Paint().apply {
-        color = android.graphics.Color.WHITE
-        textSize = 20f
-        isAntiAlias = true
-        textAlign = Paint.Align.CENTER
-    }
-    canvas.drawText("PRODUCT SCAN FRAME", 240f, 90f, paint)
-    paint.textSize = 26f
-    paint.color = android.graphics.Color.rgb(0, 112, 186) // PayPal Blue
-    paint.isFakeBoldText = true
-    canvas.drawText(targetName, 240f, 180f, paint)
-    paint.textSize = 15f
-    paint.color = android.graphics.Color.LTGRAY
-    paint.isFakeBoldText = false
-    canvas.drawText("Captured for Google Gemini 2.5 Flash Vision", 240f, 250f, paint)
-    val stream = ByteArrayOutputStream()
-    bmp.compress(Bitmap.CompressFormat.JPEG, 90, stream)
-    return stream.toByteArray()
 }

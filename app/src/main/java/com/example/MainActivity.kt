@@ -94,7 +94,6 @@ import com.example.ui.AICheckoutUiState
 import com.example.ui.AICheckoutViewModel
 import com.example.ui.components.CameraScannerView
 import com.example.ui.components.OrderHistoryBottomSheet
-import com.example.ui.components.SamplePickerBottomSheet
 import com.example.ui.components.SettingsBottomSheet
 import com.example.ui.theme.AccentError
 import com.example.ui.theme.AccentSuccess
@@ -128,7 +127,6 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showHistorySheet by remember { mutableStateOf(false) }
-    var showSamplePicker by remember { mutableStateOf(false) }
 
     // Fallback confirmation dialog if biometric hardware unavailable on emulator
     var showBiometricFallbackDialog by remember { mutableStateOf<DiscoveredProduct?>(null) }
@@ -226,10 +224,9 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                 when (state) {
                     is AICheckoutUiState.Idle -> {
                         CameraScannerView(
-                            onImageCaptured = { bytes, sampleProduct ->
-                                viewModel.analyzeImageWithAIAgent(bytes, sampleProduct)
+                            onImageCaptured = { bytes ->
+                                viewModel.analyzeImageWithAIAgent(bytes)
                             },
-                            onOpenSamplePicker = { showSamplePicker = true },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -349,15 +346,6 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
     }
 
     // Sheets
-    if (showSamplePicker) {
-        SamplePickerBottomSheet(
-            onDismiss = { showSamplePicker = false },
-            onProductSelected = { item ->
-                viewModel.analyzeCatalogItem(item)
-            }
-        )
-    }
-
     if (showSettingsSheet) {
         SettingsBottomSheet(
             currentUrl = backendUrl,
@@ -943,31 +931,58 @@ fun ErrorScreen(
     onRetry: () -> Unit,
     onOpenSettings: (() -> Unit)? = null
 ) {
+    val isScanError = errorMessage.contains("Scan", ignoreCase = true) ||
+            errorMessage.contains("Gemini", ignoreCase = true) ||
+            errorMessage.contains("camera", ignoreCase = true) ||
+            errorMessage.contains("image", ignoreCase = true)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("⚠️", fontSize = 52.sp)
-        Spacer(modifier = Modifier.height(12.dp))
+        Surface(
+            shape = CircleShape,
+            color = AccentError.copy(alpha = 0.12f),
+            modifier = Modifier.size(68.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(if (isScanError) "🔍" else "⚠️", fontSize = 34.sp)
+            }
+        }
+        Spacer(modifier = Modifier.height(14.dp))
         Text(
-            text = "PayPal Sandbox Pipeline Alert",
+            text = if (isScanError) "AI Scan Pipeline Alert" else "PayPal API Error",
             fontWeight = FontWeight.Bold,
             fontSize = 20.sp,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = errorMessage,
-            color = AccentError,
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center,
-            lineHeight = 18.sp
-        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Actual Error Response:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AccentError
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = errorMessage,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(24.dp))
-        if (onOpenSettings != null) {
+        if (onOpenSettings != null && !isScanError) {
             Button(
                 onClick = onOpenSettings,
                 colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
@@ -978,7 +993,7 @@ fun ErrorScreen(
             ) {
                 Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Open Settings & Fix PayPal Secret", fontWeight = FontWeight.SemiBold)
+                Text("Open Settings", fontWeight = FontWeight.SemiBold)
             }
             Spacer(modifier = Modifier.height(10.dp))
         }
@@ -990,7 +1005,7 @@ fun ErrorScreen(
                 .height(48.dp)
                 .testTag("back_to_camera_button")
         ) {
-            Text("Back to Camera", fontWeight = FontWeight.SemiBold)
+            Text("Back to Camera / Try Again", fontWeight = FontWeight.SemiBold)
         }
     }
 }
