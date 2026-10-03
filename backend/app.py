@@ -38,7 +38,7 @@ def health_check():
     return jsonify({
         "status": "online",
         "service": "AgentCart AI Multi-Agent Backend",
-        "models": ["gemini-flash-latest", "gemini-3.5-flash"],
+        "models": ["gemini-flash-latest", "gemini-3.8-flash"],
         "gemini_configured": bool(GEMINI_KEY),
         "paypal_configured": bool(PAYPAL_CLIENT_ID and PAYPAL_SECRET),
         "channel3_configured": bool(CHANNEL3_API_KEY),
