@@ -115,7 +115,13 @@ class AICheckoutViewModel : ViewModel() {
             try {
                 val isCustomBackend = !_backendUrl.value.contains("your-agentcart-backend.onrender.com")
                 if (isCustomBackend) {
-                    val response = NetworkClient.api.executePayment(mapOf("productId" to productId))
+                    val response = NetworkClient.api.executePayment(
+                        mapOf(
+                            "productId" to productId,
+                            "productTitle" to currentProduct.title,
+                            "price" to currentProduct.price
+                        )
+                    )
                     if (response.status == "COMPLETED") {
                         val record = OrderRecord(
                             orderId = response.transactionId.ifEmpty { "PP-CAPT-${UUID.randomUUID().toString().take(8).uppercase()}" },

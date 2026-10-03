@@ -338,7 +338,7 @@ fun SettingsBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("backend_url_input"),
-                placeholder = { Text("https://your-agentcart-backend.onrender.com") },
+                placeholder = { Text("https://agentcart-ai.onrender.com") },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
@@ -397,7 +397,7 @@ fun SettingsBottomSheet(
             ) {
                 OutlinedButton(
                     onClick = {
-                        urlInput = "https://your-agentcart-backend.onrender.com"
+                        urlInput = "https://agentcart-ai.onrender.com"
                         onSaveUrl(urlInput)
                         PayPalSandboxClient.customClientId = null
                         PayPalSandboxClient.customClientSecret = null

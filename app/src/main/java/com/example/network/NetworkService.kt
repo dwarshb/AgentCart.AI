@@ -21,7 +21,10 @@ data class DiscoveredProduct(
     @SerializedName("description") val description: String? = null,
     @SerializedName("imageUrl") val imageUrl: String? = null,
     @SerializedName("category") val category: String? = "Consumer Electronics",
-    @SerializedName("currency") val currency: String? = "USD"
+    @SerializedName("currency") val currency: String? = "USD",
+    @SerializedName("visionModel") val visionModel: String? = null,
+    @SerializedName("geminiRawOutput") val geminiRawOutput: String? = null,
+    @SerializedName("geminiStatus") val geminiStatus: String? = null
 )
 
 data class PaymentResponse(
@@ -40,8 +43,8 @@ interface AgentCartApi {
 }
 
 object NetworkClient {
-    // Default placeholder URL from the Blueprint, customizable in Settings
-    var baseUrl: String = "https://your-agentcart-backend.onrender.com"
+    // Live Render backend URL configured
+    var baseUrl: String = "https://agentcart-ai.onrender.com"
         set(value) {
             val sanitized = if (value.endsWith("/")) value else "$value/"
             field = sanitized
