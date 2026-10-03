@@ -1,0 +1,6 @@
+{
+  "name": "AgentCart AI",
+  "description": "AgentCart AI automates visual product discovery and secure 1-click PayPal checkout powered by Gemini Vision and Channel3 commerce integration.",
+  "requestFramePermissions": ["android.permission.CAMERA"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
