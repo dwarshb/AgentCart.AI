@@ -176,7 +176,7 @@ fun CameraScannerView(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "GEMINI 2.5 FLASH VISION SCANNER",
+                        text = "GEMINI FLASH VISION SCANNER",
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -352,7 +352,7 @@ fun CameraScannerView(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "GEMINI 2.5 MULTIMODAL LENS",
+                            text = "GEMINI FLASH MULTIMODAL LENS",
                             color = Color.White,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -455,7 +455,7 @@ fun CameraScannerView(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "• Snapshots and picked photos stream directly to Gemini 2.5 Flash on Render.\n• If no product is recognized or if an API key fails, an exact error message will be displayed.\n• No dummy or fallback data is used.",
+                    text = "• Snapshots and picked photos stream directly to Gemini Flash on Render.\n• If no product is recognized or if an API key fails, an exact error message will be displayed.\n• No dummy or fallback data is used.",
                     fontSize = 11.sp,
                     lineHeight = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

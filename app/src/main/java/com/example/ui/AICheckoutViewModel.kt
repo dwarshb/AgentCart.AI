@@ -17,10 +17,10 @@ import retrofit2.HttpException
 
 sealed class AICheckoutUiState {
     object Idle : AICheckoutUiState()
-    data class ProcessingAI(val statusMessage: String = "Uploading to Gemini 2.5 Flash Vision...") : AICheckoutUiState()
+    data class ProcessingAI(val statusMessage: String = "Uploading to Gemini Flash Vision...") : AICheckoutUiState()
     data class ReviewMatch(
         val product: DiscoveredProduct,
-        val source: String = "Gemini 2.5 Flash Multimodal Vision"
+        val source: String = "Gemini Flash Multimodal Vision"
     ) : AICheckoutUiState()
     object ExecutingPayment : AICheckoutUiState()
     data class Success(
@@ -77,7 +77,7 @@ class AICheckoutViewModel : ViewModel() {
     }
 
     /**
-     * Sends captured image bytes to Gemini 2.5 Flash Vision on Render backend
+     * Sends captured image bytes to Gemini Flash Vision on Render backend
      */
     fun analyzeImageWithAIAgent(imageBytes: ByteArray) {
         if (imageBytes.isEmpty()) {
@@ -88,14 +88,14 @@ class AICheckoutViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            _uiState.value = AICheckoutUiState.ProcessingAI("Uploading image to Google Gemini 2.5 Flash Vision...")
+            _uiState.value = AICheckoutUiState.ProcessingAI("Uploading image to Google Gemini Flash Vision...")
             try {
                 val requestBody = imageBytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
                 val product = NetworkClient.api.analyzeImage(requestBody)
                 _selectedProduct.value = product
                 _uiState.value = AICheckoutUiState.ReviewMatch(
                     product = product,
-                    source = "Gemini 2.5 Flash Vision"
+                    source = product.visionModel ?: "Gemini Flash Vision"
                 )
             } catch (e: Exception) {
                 val errorDetails = extractErrorMessage(e)

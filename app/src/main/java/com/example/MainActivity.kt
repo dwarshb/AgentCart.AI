@@ -423,7 +423,7 @@ fun ProcessingAIScreen(statusMessage: String) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Multimodal inference running on Gemini 2.5 Flash & Channel3 Node",
+            text = "Multimodal inference running on Google Gemini Flash & Channel3 Node",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -584,7 +584,7 @@ fun ReviewMatchScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (isGeminiSuccess) "Gemini 2.5 Flash Vision: LIVE" else "Gemini Vision Pipeline Status",
+                                    text = if (isGeminiSuccess) "Gemini Flash Vision: LIVE" else "Gemini Vision Pipeline Status",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = when {

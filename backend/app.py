@@ -38,6 +38,7 @@ def health_check():
     return jsonify({
         "status": "online",
         "service": "AgentCart AI Multi-Agent Backend",
+        "models": ["gemini-flash-latest", "gemini-3.5-flash"],
         "gemini_configured": bool(GEMINI_KEY),
         "paypal_configured": bool(PAYPAL_CLIENT_ID and PAYPAL_SECRET),
         "channel3_configured": bool(CHANNEL3_API_KEY),
@@ -61,53 +62,69 @@ def process_agent_intent():
                 "error": "GEMINI_API_KEY is not configured on Render. Please add your GEMINI_API_KEY in Render Dashboard -> Environment Variables to enable live image recognition."
             }), 400
         
-        # Multi-modal Vision Processing via Gemini 2.5 Flash
-        try:
-            vision_model = genai.GenerativeModel('gemini-2.5-flash')
-            prompt = (
-                "You are an AI shopping agent scanning a camera feed. "
-                "Identify this commercial product exactly. "
-                "Output ONLY a single line with: <Brand> <Model Name> | <Estimated Price USD, e.g. $49.99> | <Category>. "
-                "Do NOT include markdown, explanations, or quotes."
-            )
-            
-            gemini_response = vision_model.generate_content([
-                {"mime_type": "image/jpeg", "data": image_bytes},
-                prompt
-            ])
-            raw_text = gemini_response.text.strip() if gemini_response else ""
-            
-            if not raw_text:
-                return jsonify({
-                    "status": "FAILED",
-                    "error": "Gemini 2.5 Flash Vision was unable to recognize any commercial product in this image. Please aim clearly at a product with visible branding."
-                }), 422
-            
-            # Parse model output
-            parts = [p.strip() for p in raw_text.split("|")]
-            product_title = parts[0]
-            price = parts[1] if len(parts) > 1 and "$" in parts[1] else "$49.99"
-            category = parts[2] if len(parts) > 2 else "Consumer Products"
-            
-            return jsonify({
-                "id": f"AI-{abs(hash(product_title)) % 100000}",
-                "title": product_title,
-                "price": price,
-                "confidenceScore": "99% Gemini 2.5 Flash Match",
-                "merchantName": "Verified Channel3 Merchant Node",
-                "description": f"Real-time product identification powered by Google Gemini 2.5 Flash multimodal vision.",
-                "category": category,
-                "currency": "USD",
-                "visionModel": "gemini-2.5-flash",
-                "geminiRawOutput": raw_text,
-                "geminiStatus": "SUCCESS"
-            })
-            
-        except Exception as gemini_err:
+        # Multi-modal Vision Processing using modern Gemini Flash models
+        # Uses gemini-flash-latest and gemini-3.5-flash with auto-fallback
+        custom_model = os.getenv("GEMINI_MODEL", "").strip()
+        candidate_models = [m for m in [custom_model, "gemini-flash-latest", "gemini-3.5-flash"] if m]
+        
+        gemini_response = None
+        used_model_name = ""
+        last_error = None
+        
+        prompt = (
+            "You are an AI shopping agent scanning a camera feed. "
+            "Identify this commercial product exactly. "
+            "Output ONLY a single line with: <Brand> <Model Name> | <Estimated Price USD, e.g. $49.99> | <Category>. "
+            "Do NOT include markdown, explanations, or quotes."
+        )
+
+        for model_name in candidate_models:
+            try:
+                vision_model = genai.GenerativeModel(model_name)
+                res = vision_model.generate_content([
+                    {"mime_type": "image/jpeg", "data": image_bytes},
+                    prompt
+                ])
+                if res and res.text:
+                    gemini_response = res
+                    used_model_name = model_name
+                    break
+            except Exception as e:
+                last_error = e
+                continue
+
+        if not gemini_response or not used_model_name:
             return jsonify({
                 "status": "FAILED",
-                "error": f"Gemini 2.5 Flash Vision API Error: {str(gemini_err)}"
+                "error": f"Gemini Vision API Error: {str(last_error)}"
             }), 500
+
+        raw_text = gemini_response.text.strip()
+        if not raw_text:
+            return jsonify({
+                "status": "FAILED",
+                "error": f"Gemini Vision ({used_model_name}) was unable to recognize any commercial product in this image. Please aim clearly at a product with visible branding."
+            }), 422
+        
+        # Parse model output
+        parts = [p.strip() for p in raw_text.split("|")]
+        product_title = parts[0]
+        price = parts[1] if len(parts) > 1 and "$" in parts[1] else "$49.99"
+        category = parts[2] if len(parts) > 2 else "Consumer Products"
+        
+        return jsonify({
+            "id": f"AI-{abs(hash(product_title)) % 100000}",
+            "title": product_title,
+            "price": price,
+            "confidenceScore": f"99% {used_model_name} Match",
+            "merchantName": "Verified Channel3 Merchant Node",
+            "description": f"Real-time product identification powered by Google Gemini ({used_model_name}) multimodal vision.",
+            "category": category,
+            "currency": "USD",
+            "visionModel": used_model_name,
+            "geminiRawOutput": raw_text,
+            "geminiStatus": "SUCCESS"
+        })
 
     except Exception as e:
         return jsonify({
