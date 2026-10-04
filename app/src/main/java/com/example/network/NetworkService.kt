@@ -38,8 +38,18 @@ interface AgentCartApi {
     @POST("/api/process-agent-intent")
     suspend fun analyzeImage(@Body imageBytes: RequestBody): DiscoveredProduct
 
-    @POST("/api/execute-paypal")
-    suspend fun executePayment(@Body payload: Map<String, String>): PaymentResponse
+    @POST("/api/process-text-intent")
+    suspend fun analyzeText(@Body payload: Map<String, String>): DiscoveredProduct
+
+    // @POST("/api/execute-paypal")
+    // suspend fun executePayment(@Body payload: Map<String, String>): PaymentResponse
+    
+    @POST("api/execute-paypal")
+    suspend fun executePayment(@Body body: Map<String, String>): PayPalCreateOrderResponse
+    
+    @POST("api/capture-paypal")
+    suspend fun capturePayPal(@Body body: Map<String, String>): PayPalCaptureResponse
+
 }
 
 object NetworkClient {

@@ -1,6 +1,9 @@
 package com.example
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -38,6 +41,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Fingerprint
@@ -115,6 +119,30 @@ class MainActivity : FragmentActivity() {
                 MainAgentWorkflowScreen(viewModel = viewModel, activity = this)
             }
         }
+        handlePayPalIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handlePayPalIntent(intent)
+    }
+
+    private fun handlePayPalIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme == "agentcart" && uri.host == "paypal") {
+            when (uri.path) {
+                "/return" -> {
+                    val orderId = uri.getQueryParameter("token")
+                    if (!orderId.isNullOrBlank()) {
+                        viewModel.capturePayPalPayment(orderId)
+                    }
+                }
+                "/cancel" -> {
+                    viewModel.paypalCancelled()
+                }
+            }
+        }
     }
 }
 
@@ -124,12 +152,15 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
     val uiState by viewModel.uiState.collectAsState()
     val backendUrl by viewModel.backendUrl.collectAsState()
     val useFallback by viewModel.useSandboxFallback.collectAsState()
+    val useGemmaOnDevice by viewModel.useGemmaOnDevice.collectAsState()
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showHistorySheet by remember { mutableStateOf(false) }
 
     // Fallback confirmation dialog if biometric hardware unavailable on emulator
     var showBiometricFallbackDialog by remember { mutableStateOf<DiscoveredProduct?>(null) }
+    
+    val context = LocalContext.current
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -227,6 +258,9 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                             onImageCaptured = { bytes ->
                                 viewModel.analyzeImageWithAIAgent(bytes)
                             },
+                            onTextSubmitted = { query ->
+                                viewModel.analyzeTextWithAIAgent(query)
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -243,7 +277,9 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                                 BiometricAuthenticator.promptBiometrics(
                                     activity = activity,
                                     onAuthenticated = {
-                                        viewModel.executePayPalPayment(state.product.id)
+                                        viewModel.executePayPalPayment(state.product.id){ approvalUrl ->
+                                        val intent = Intent(Intent.ACTION_VIEW,Uri.parse(approvalUrl))
+                                        context.startActivity(intent)}
                                     },
                                     onError = { _ ->
                                         // If biometrics not enrolled in emulator, open fallback confirmation
@@ -256,7 +292,24 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                     }
 
                     is AICheckoutUiState.ExecutingPayment -> {
-                        ExecutingPaymentScreen()
+                        ExecutingPaymentScreen(statusText = "Creating PayPal Order...")
+                    }
+
+                    is AICheckoutUiState.WaitingForPayPalApproval -> {
+                        WaitingForPayPalApprovalScreen(
+                            orderId = state.orderId,
+                            approvalUrl = state.approvalUrl,
+                            product = state.product,
+                            onReopenBrowser = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(state.approvalUrl))
+                                context.startActivity(intent)
+                            },
+                            onCancel = { viewModel.paypalCancelled() }
+                        )
+                    }
+
+                    is AICheckoutUiState.CapturingPayment -> {
+                        ExecutingPaymentScreen(statusText = "Capturing Approved PayPal Payment...")
                     }
 
                     is AICheckoutUiState.Success -> {
@@ -329,7 +382,9 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                     onClick = {
                         val prodId = product.id
                         showBiometricFallbackDialog = null
-                        viewModel.executePayPalPayment(prodId)
+                         viewModel.executePayPalPayment(prodId){ approvalUrl ->
+                                        val intent = Intent(Intent.ACTION_VIEW,Uri.parse(approvalUrl))
+                                        context.startActivity(intent)}
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
                     modifier = Modifier.testTag("dialog_confirm_pay_button")
@@ -350,8 +405,10 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
         SettingsBottomSheet(
             currentUrl = backendUrl,
             useFallback = useFallback,
+            useGemmaOnDevice = useGemmaOnDevice,
             onSaveUrl = { viewModel.updateBackendUrl(it) },
             onToggleFallback = { viewModel.setSandboxFallback(it) },
+            onToggleGemmaOnDevice = { viewModel.setUseGemmaOnDevice(it) },
             onDismiss = { showSettingsSheet = false }
         )
     }
@@ -556,13 +613,15 @@ fun ReviewMatchScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Gemini 2.5 Flash Model Diagnostics Telemetry
+                    // Model Diagnostics Telemetry
+                    val isGemmaOnDevice = product.visionModel?.contains("Gemma", ignoreCase = true) == true || source.contains("Gemma", ignoreCase = true)
                     val isGeminiSuccess = product.geminiStatus == "SUCCESS"
                     val isGeminiMissing = product.geminiStatus == "MISSING_API_KEY"
                     val isGeminiError = product.geminiStatus == "ERROR"
 
                     Surface(
                         color = when {
+                            isGemmaOnDevice -> AccentSuccess.copy(alpha = 0.12f)
                             isGeminiSuccess -> AccentSuccess.copy(alpha = 0.1f)
                             isGeminiMissing || isGeminiError -> Color(0xFFFFF3CD)
                             else -> PayPalBlue.copy(alpha = 0.08f)
@@ -573,10 +632,10 @@ fun ReviewMatchScreen(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    Icons.Default.AutoAwesome,
+                                    if (isGemmaOnDevice) Icons.Default.Bolt else Icons.Default.AutoAwesome,
                                     contentDescription = null,
                                     tint = when {
-                                        isGeminiSuccess -> AccentSuccess
+                                        isGemmaOnDevice || isGeminiSuccess -> AccentSuccess
                                         isGeminiMissing || isGeminiError -> Color(0xFF856404)
                                         else -> PayPalBlue
                                     },
@@ -584,11 +643,15 @@ fun ReviewMatchScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (isGeminiSuccess) "Gemini Flash Vision: LIVE" else "Gemini Vision Pipeline Status",
+                                    text = when {
+                                        isGemmaOnDevice -> "⚡ Gemma-4 On-Device Engine: VERIFIED"
+                                        isGeminiSuccess -> "Gemini Flash Vision: LIVE"
+                                        else -> "AI Pipeline Status"
+                                    },
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = when {
-                                        isGeminiSuccess -> Color(0xFF2E7D32)
+                                        isGemmaOnDevice || isGeminiSuccess -> Color(0xFF2E7D32)
                                         isGeminiMissing || isGeminiError -> Color(0xFF856404)
                                         else -> PayPalNavy
                                     }
@@ -597,6 +660,7 @@ fun ReviewMatchScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = when {
+                                    isGemmaOnDevice -> "100% on-device local execution using Gemma-4. Zero cloud API keys required."
                                     isGeminiSuccess -> "✅ Live multimodal inference succeeded on Render backend."
                                     isGeminiMissing -> "⚠️ GEMINI_API_KEY is not set on Render. Add it in Render Dashboard -> Environment Variables to run live vision."
                                     isGeminiError -> "⚠️ Gemini call returned error: ${product.geminiRawOutput}"
@@ -606,10 +670,10 @@ fun ReviewMatchScreen(
                                 lineHeight = 15.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            if (!product.geminiRawOutput.isNullOrBlank() && isGeminiSuccess) {
+                            if (!product.geminiRawOutput.isNullOrBlank()) {
                                 Spacer(modifier = Modifier.height(3.dp))
                                 Text(
-                                    text = "Model Prompt Output: \"${product.geminiRawOutput}\"",
+                                    text = "Model Output: \"${product.geminiRawOutput}\"",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -735,7 +799,7 @@ fun ReviewMatchScreen(
 }
 
 @Composable
-fun ExecutingPaymentScreen() {
+fun ExecutingPaymentScreen(statusText: String = "Authorizing PayPal Sandbox Ledger...") {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -750,7 +814,7 @@ fun ExecutingPaymentScreen() {
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "Authorizing PayPal Sandbox Ledger...",
+            text = statusText,
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp,
             color = MaterialTheme.colorScheme.onSurface,
@@ -758,11 +822,71 @@ fun ExecutingPaymentScreen() {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Executing OAuth2 token exchange & v2/checkout capture",
+            text = "Executing OAuth2 token exchange & v2/checkout order",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+fun WaitingForPayPalApprovalScreen(
+    orderId: String,
+    approvalUrl: String,
+    product: DiscoveredProduct,
+    onReopenBrowser: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(28.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator(
+            color = PayPalBlue,
+            strokeWidth = 4.dp,
+            modifier = Modifier.size(54.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Waiting for PayPal Approval",
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Please log in and authorize the payment for ${product.title} (${product.price}) in the PayPal Sandbox browser window. Once approved, you will be redirected back here automatically.",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            lineHeight = 18.sp
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onReopenBrowser,
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Text("Re-open PayPal Approval Tab", fontWeight = FontWeight.Bold, color = Color.White)
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onCancel,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Text("Cancel Order")
+        }
     }
 }
 
