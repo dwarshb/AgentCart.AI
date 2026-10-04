@@ -2,12 +2,10 @@ package com.example.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ai.GemmaOnDeviceEngine
 import com.example.data.OrderHistoryRepository
 import com.example.data.OrderRecord
 import com.example.network.DiscoveredProduct
 import com.example.network.NetworkClient
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,10 +17,10 @@ import retrofit2.HttpException
 
 sealed class AICheckoutUiState {
     object Idle : AICheckoutUiState()
-    data class ProcessingAI(val statusMessage: String = "Gemma-4 On-Device analyzing product intent...") : AICheckoutUiState()
+    data class ProcessingAI(val statusMessage: String = "Google Gemini analyzing product intent...") : AICheckoutUiState()
     data class ReviewMatch(
         val product: DiscoveredProduct,
-        val source: String = "Gemma-4 On-Device Engine"
+        val source: String = "Gemini Flash Vision"
     ) : AICheckoutUiState()
     object ExecutingPayment : AICheckoutUiState()
     data class WaitingForPayPalApproval(
@@ -47,10 +45,6 @@ class AICheckoutViewModel : ViewModel() {
     private val _backendUrl = MutableStateFlow(NetworkClient.baseUrl)
     val backendUrl: StateFlow<String> = _backendUrl.asStateFlow()
 
-    // Default to true so user can immediately use Gemma-4 on-device without cloud API key friction
-    private val _useGemmaOnDevice = MutableStateFlow(true)
-    val useGemmaOnDevice: StateFlow<Boolean> = _useGemmaOnDevice.asStateFlow()
-
     private val _selectedProduct = MutableStateFlow<DiscoveredProduct?>(null)
     val selectedProduct: StateFlow<DiscoveredProduct?> = _selectedProduct.asStateFlow()
 
@@ -65,10 +59,6 @@ class AICheckoutViewModel : ViewModel() {
 
     fun setSandboxFallback(enabled: Boolean) {
         _useSandboxFallback.value = enabled
-    }
-
-    fun setUseGemmaOnDevice(enabled: Boolean) {
-        _useGemmaOnDevice.value = enabled
     }
 
     private fun extractErrorMessage(e: Exception): String {
@@ -94,7 +84,7 @@ class AICheckoutViewModel : ViewModel() {
     }
 
     /**
-     * Primary Text-based Product Intent input:
+     * Primary Text-based Product Intent input using Gemini API:
      * User can directly type product details (brand, model, specs) to skip image scanning.
      */
     fun analyzeTextWithAIAgent(productQuery: String) {
@@ -107,47 +97,23 @@ class AICheckoutViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            _uiState.value = AICheckoutUiState.ProcessingAI("Gemma-4 On-Device parsing specifications & prices...")
-
-            if (_useGemmaOnDevice.value) {
-                delay(300) // On-device inference feedback
-                val result = GemmaOnDeviceEngine.analyzeTextIntent(trimmed)
-                result.onSuccess { product ->
-                    _selectedProduct.value = product
-                    _uiState.value = AICheckoutUiState.ReviewMatch(
-                        product = product,
-                        source = GemmaOnDeviceEngine.MODEL_NAME
-                    )
-                }.onFailure { error ->
-                    _uiState.value = AICheckoutUiState.Error("Gemma-4 Parsing Alert: ${error.message}")
-                }
-            } else {
-                // Cloud endpoint attempt with local fallback
-                try {
-                    val product = NetworkClient.api.analyzeText(mapOf("query" to trimmed))
-                    _selectedProduct.value = product
-                    _uiState.value = AICheckoutUiState.ReviewMatch(
-                        product = product,
-                        source = product.visionModel ?: "Gemma-4 Cloud Service"
-                    )
-                } catch (e: Exception) {
-                    val localResult = GemmaOnDeviceEngine.analyzeTextIntent(trimmed)
-                    localResult.onSuccess { product ->
-                        _selectedProduct.value = product
-                        _uiState.value = AICheckoutUiState.ReviewMatch(
-                            product = product,
-                            source = "Gemma-4 On-Device Engine (Local Fallback)"
-                        )
-                    }.onFailure {
-                        _uiState.value = AICheckoutUiState.Error("Product Search Failed: ${extractErrorMessage(e)}")
-                    }
-                }
+            _uiState.value = AICheckoutUiState.ProcessingAI("Google Gemini parsing specifications & prices...")
+            try {
+                val product = NetworkClient.api.analyzeText(mapOf("query" to trimmed))
+                _selectedProduct.value = product
+                _uiState.value = AICheckoutUiState.ReviewMatch(
+                    product = product,
+                    source = product.visionModel ?: "Gemini AI"
+                )
+            } catch (e: Exception) {
+                val errorDetails = extractErrorMessage(e)
+                _uiState.value = AICheckoutUiState.Error("Product Intent Analysis Error: $errorDetails")
             }
         }
     }
 
     /**
-     * Analyzes image bytes with Gemma-4 (on-device or via backend)
+     * Analyzes image bytes with Google Gemini Flash Vision via Render backend
      */
     fun analyzeImageWithAIAgent(imageBytes: ByteArray) {
         if (imageBytes.isEmpty()) {
@@ -158,50 +124,26 @@ class AICheckoutViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            if (_useGemmaOnDevice.value) {
-                _uiState.value = AICheckoutUiState.ProcessingAI("Gemma-4 On-Device Vision analyzing photo...")
-                delay(400)
-                val result = GemmaOnDeviceEngine.analyzeImageIntentOnDevice(imageBytes)
-                result.onSuccess { product ->
-                    _selectedProduct.value = product
-                    _uiState.value = AICheckoutUiState.ReviewMatch(
-                        product = product,
-                        source = "Gemma-4 On-Device Vision"
-                    )
-                }.onFailure {
-                    _uiState.value = AICheckoutUiState.Error("Gemma-4 Local Vision Error: ${it.message}")
-                }
-            } else {
-                _uiState.value = AICheckoutUiState.ProcessingAI("Uploading image to Cloud Vision...")
-                try {
-                    val requestBody = imageBytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
-                    val product = NetworkClient.api.analyzeImage(requestBody)
-                    _selectedProduct.value = product
-                    _uiState.value = AICheckoutUiState.ReviewMatch(
-                        product = product,
-                        source = product.visionModel ?: "Cloud Vision"
-                    )
-                } catch (e: Exception) {
-                    val localResult = GemmaOnDeviceEngine.analyzeImageIntentOnDevice(imageBytes)
-                    localResult.onSuccess { product ->
-                        _selectedProduct.value = product
-                        _uiState.value = AICheckoutUiState.ReviewMatch(
-                            product = product,
-                            source = "Gemma-4 On-Device Vision (Auto Fallback)"
-                        )
-                    }.onFailure {
-                        val errorDetails = extractErrorMessage(e)
-                        _uiState.value = AICheckoutUiState.Error("Product Scan Failed: $errorDetails")
-                    }
-                }
+            _uiState.value = AICheckoutUiState.ProcessingAI("Uploading image to Google Gemini Flash Vision...")
+            try {
+                val requestBody = imageBytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
+                val product = NetworkClient.api.analyzeImage(requestBody)
+                _selectedProduct.value = product
+                _uiState.value = AICheckoutUiState.ReviewMatch(
+                    product = product,
+                    source = product.visionModel ?: "Gemini Flash Vision"
+                )
+            } catch (e: Exception) {
+                val errorDetails = extractErrorMessage(e)
+                _uiState.value = AICheckoutUiState.Error("Gemini Vision Scan Error: $errorDetails")
             }
         }
     }
 
     /**
-     * Executes real PayPal order capture via Render backend
+     * Step 1: Executes real PayPal order creation via Render backend
      */
-    fun executePayPalPayment(productId: String,onApprovalRequired: (String)->Unit) {
+    fun executePayPalPayment(productId: String, onApprovalRequired: (String) -> Unit) {
         val currentProduct = _selectedProduct.value
         if (currentProduct == null) {
             _uiState.value = AICheckoutUiState.Error("No scanned product selected for payment.")
@@ -219,58 +161,28 @@ class AICheckoutViewModel : ViewModel() {
                     )
                 )
 
-                 if (
-                response.status == "CREATED" &&
-                !response.orderId.isNullOrBlank() &&
-                !response.approvalUrl.isNullOrBlank()
-            ) {
+                if (
+                    response.status == "CREATED" &&
+                    !response.orderId.isNullOrBlank() &&
+                    !response.approvalUrl.isNullOrBlank()
+                ) {
+                    val orderId = response.orderId
+                    val approvalUrl = response.approvalUrl
 
-                val orderId =
-                    response.orderId!!
-
-                val approvalUrl =
-                    response.approvalUrl!!
-
-                _uiState.value =
-                    AICheckoutUiState.WaitingForPayPalApproval(
+                    _uiState.value = AICheckoutUiState.WaitingForPayPalApproval(
                         orderId = orderId,
                         approvalUrl = approvalUrl,
                         product = currentProduct
                     )
 
-                /*
-                 * Tell Activity/Compose to open PayPal.
-                 */
-                onApprovalRequired(approvalUrl)
-
-            } else {
-
-                _uiState.value =
-                    AICheckoutUiState.Error(
+                    onApprovalRequired(approvalUrl)
+                } else {
+                    _uiState.value = AICheckoutUiState.Error(
                         response.error
                             ?: response.message
                             ?: "PayPal order could not be created."
                     )
-            }
-
-                // if (response.status == "COMPLETED") {
-                //     val record = OrderRecord(
-                //         orderId = response.transactionId,
-                //         product = currentProduct,
-                //         status = "COMPLETED",
-                //         paymentMethod = "PayPal Sandbox 1-Click"
-                //     )
-                //     OrderHistoryRepository.addOrder(record)
-                //     _uiState.value = AICheckoutUiState.Success(
-                //         transactionId = response.transactionId,
-                //         product = currentProduct,
-                //         zapierTriggered = true
-                //     )
-                // } else {
-                //     _uiState.value = AICheckoutUiState.Error(
-                //         "PayPal Payment Incomplete. Status returned: ${response.status}"
-                //     )
-                // }
+                }
             } catch (e: Exception) {
                 val errorDetails = extractErrorMessage(e)
                 _uiState.value = AICheckoutUiState.Error(
@@ -280,107 +192,52 @@ class AICheckoutViewModel : ViewModel() {
         }
     }
 
-/**
- * Step 2:
- *
- * Called after PayPal redirects the user back to the Android app.
- *
- * This is where the backend captures the approved PayPal order.
- */
-fun capturePayPalPayment(
-    orderId: String
-) {
+    /**
+     * Step 2: Called after PayPal redirects the user back to the Android app.
+     * Captures the approved PayPal order.
+     */
+    fun capturePayPalPayment(orderId: String) {
+        val currentProduct = _selectedProduct.value
+        if (currentProduct == null) {
+            _uiState.value = AICheckoutUiState.Error("Product information was lost before PayPal capture.")
+            return
+        }
 
-    val currentProduct =
-        _selectedProduct.value
+        viewModelScope.launch {
+            _uiState.value = AICheckoutUiState.CapturingPayment
+            try {
+                val response = NetworkClient.api.capturePayPal(mapOf("orderId" to orderId))
 
-    if (currentProduct == null) {
-
-        _uiState.value =
-            AICheckoutUiState.Error(
-                "Product information was lost before PayPal capture."
-            )
-
-        return
-    }
-
-    viewModelScope.launch {
-
-        _uiState.value =
-            AICheckoutUiState.CapturingPayment
-
-        try {
-
-            val response =
-                NetworkClient.api.capturePayPal(
-                    mapOf(
-                        "orderId" to orderId
-                    )
-                )
-
-            if (
-                response.status == "COMPLETED" &&
-                !response.captureId.isNullOrBlank()
-            ) {
-
-                val transactionId =
-                    response.captureId!!
-
-                /*
-                 * IMPORTANT:
-                 *
-                 * Use the PayPal capture ID as the transaction ID.
-                 * Do NOT use the PayPal order ID here.
-                 */
-                val record =
-                    OrderRecord(
+                if (response.status == "COMPLETED" && !response.captureId.isNullOrBlank()) {
+                    val transactionId = response.captureId
+                    val record = OrderRecord(
                         orderId = transactionId,
                         product = currentProduct,
                         status = "COMPLETED",
                         paymentMethod = "PayPal Sandbox"
                     )
+                    OrderHistoryRepository.addOrder(record)
 
-                OrderHistoryRepository.addOrder(
-                    record
-                )
-
-                _uiState.value =
-                    AICheckoutUiState.Success(
+                    _uiState.value = AICheckoutUiState.Success(
                         transactionId = transactionId,
                         product = currentProduct,
-                        zapierTriggered =
-                            response.zapierTriggered
+                        zapierTriggered = response.zapierTriggered
                     )
-
-            } else {
-
-                _uiState.value =
-                    AICheckoutUiState.Error(
-                        response.error
-                            ?: "PayPal payment was not completed."
+                } else {
+                    _uiState.value = AICheckoutUiState.Error(
+                        response.error ?: "PayPal payment was not completed."
                     )
+                }
+            } catch (e: Exception) {
+                val errorDetails = extractErrorMessage(e)
+                _uiState.value = AICheckoutUiState.Error("PayPal Capture Error: $errorDetails")
             }
-
-        } catch (e: Exception) {
-
-            val errorDetails =
-                extractErrorMessage(e)
-
-            _uiState.value =
-                AICheckoutUiState.Error(
-                    "PayPal Capture Error: $errorDetails"
-                )
         }
     }
-}
 
-fun paypalCancelled() {
-
-    _uiState.value =
-        AICheckoutUiState.Error(
-            "PayPal payment was cancelled."
-        )
-}
+    fun paypalCancelled() {
+        _uiState.value = AICheckoutUiState.Error("PayPal payment was cancelled.")
+    }
 
     fun resetState() {
         _uiState.value = AICheckoutUiState.Idle

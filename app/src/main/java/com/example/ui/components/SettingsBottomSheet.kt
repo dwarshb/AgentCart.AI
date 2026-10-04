@@ -74,10 +74,8 @@ import kotlinx.coroutines.launch
 fun SettingsBottomSheet(
     currentUrl: String,
     useFallback: Boolean,
-    useGemmaOnDevice: Boolean,
     onSaveUrl: (String) -> Unit,
     onToggleFallback: (Boolean) -> Unit,
-    onToggleGemmaOnDevice: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -85,7 +83,6 @@ fun SettingsBottomSheet(
 
     var urlInput by remember { mutableStateOf(currentUrl) }
     var fallbackEnabled by remember { mutableStateOf(useFallback) }
-    var gemmaEnabled by remember { mutableStateOf(useGemmaOnDevice) }
 
     var clientIdInput by remember { mutableStateOf(PayPalSandboxClient.effectiveClientId) }
     var clientSecretInput by remember { mutableStateOf(PayPalSandboxClient.effectiveClientSecret) }
@@ -138,64 +135,7 @@ fun SettingsBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ==================== GEMMA-4 AI ENGINE SECTION ====================
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                ),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = AccentSuccess,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Gemma-4 On-Device AI Engine",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Switch(
-                            checked = gemmaEnabled,
-                            onCheckedChange = {
-                                gemmaEnabled = it
-                                onToggleGemmaOnDevice(it)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = AccentSuccess
-                            )
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (gemmaEnabled)
-                            "⚡ Active: Gemma-4 processes product intent locally on your device with 0ms cloud latency and ZERO cloud API keys required."
-                        else
-                            "☁️ Cloud Mode: Uses your Render backend endpoints for processing.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 16.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // ==================== PAYPAL SANDBOX CREDENTIALS SECTION ====================
             Card(

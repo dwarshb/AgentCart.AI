@@ -152,7 +152,6 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
     val uiState by viewModel.uiState.collectAsState()
     val backendUrl by viewModel.backendUrl.collectAsState()
     val useFallback by viewModel.useSandboxFallback.collectAsState()
-    val useGemmaOnDevice by viewModel.useGemmaOnDevice.collectAsState()
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showHistorySheet by remember { mutableStateOf(false) }
@@ -405,10 +404,8 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
         SettingsBottomSheet(
             currentUrl = backendUrl,
             useFallback = useFallback,
-            useGemmaOnDevice = useGemmaOnDevice,
             onSaveUrl = { viewModel.updateBackendUrl(it) },
             onToggleFallback = { viewModel.setSandboxFallback(it) },
-            onToggleGemmaOnDevice = { viewModel.setUseGemmaOnDevice(it) },
             onDismiss = { showSettingsSheet = false }
         )
     }
@@ -480,7 +477,7 @@ fun ProcessingAIScreen(statusMessage: String) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Multimodal inference running on Google Gemini Flash & Channel3 Node",
+            text = "Multimodal inference running on Google Gemini Flash",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -613,15 +610,13 @@ fun ReviewMatchScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Model Diagnostics Telemetry
-                    val isGemmaOnDevice = product.visionModel?.contains("Gemma", ignoreCase = true) == true || source.contains("Gemma", ignoreCase = true)
+                    // Gemini Flash Diagnostics Telemetry
                     val isGeminiSuccess = product.geminiStatus == "SUCCESS"
                     val isGeminiMissing = product.geminiStatus == "MISSING_API_KEY"
                     val isGeminiError = product.geminiStatus == "ERROR"
 
                     Surface(
                         color = when {
-                            isGemmaOnDevice -> AccentSuccess.copy(alpha = 0.12f)
                             isGeminiSuccess -> AccentSuccess.copy(alpha = 0.1f)
                             isGeminiMissing || isGeminiError -> Color(0xFFFFF3CD)
                             else -> PayPalBlue.copy(alpha = 0.08f)
@@ -632,10 +627,10 @@ fun ReviewMatchScreen(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    if (isGemmaOnDevice) Icons.Default.Bolt else Icons.Default.AutoAwesome,
+                                    Icons.Default.AutoAwesome,
                                     contentDescription = null,
                                     tint = when {
-                                        isGemmaOnDevice || isGeminiSuccess -> AccentSuccess
+                                        isGeminiSuccess -> AccentSuccess
                                         isGeminiMissing || isGeminiError -> Color(0xFF856404)
                                         else -> PayPalBlue
                                     },
@@ -643,15 +638,11 @@ fun ReviewMatchScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = when {
-                                        isGemmaOnDevice -> "⚡ Gemma-4 On-Device Engine: VERIFIED"
-                                        isGeminiSuccess -> "Gemini Flash Vision: LIVE"
-                                        else -> "AI Pipeline Status"
-                                    },
+                                    text = if (isGeminiSuccess) "Google Gemini AI: LIVE" else "Gemini Vision Pipeline Status",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = when {
-                                        isGemmaOnDevice || isGeminiSuccess -> Color(0xFF2E7D32)
+                                        isGeminiSuccess -> Color(0xFF2E7D32)
                                         isGeminiMissing || isGeminiError -> Color(0xFF856404)
                                         else -> PayPalNavy
                                     }
@@ -660,7 +651,6 @@ fun ReviewMatchScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = when {
-                                    isGemmaOnDevice -> "100% on-device local execution using Gemma-4. Zero cloud API keys required."
                                     isGeminiSuccess -> "✅ Live multimodal inference succeeded on Render backend."
                                     isGeminiMissing -> "⚠️ GEMINI_API_KEY is not set on Render. Add it in Render Dashboard -> Environment Variables to run live vision."
                                     isGeminiError -> "⚠️ Gemini call returned error: ${product.geminiRawOutput}"

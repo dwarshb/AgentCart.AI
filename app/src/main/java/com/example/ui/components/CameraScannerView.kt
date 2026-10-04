@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -83,6 +84,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,6 +110,7 @@ fun CameraScannerView(
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var typedProductText by remember { mutableStateOf("") }
+    var typedPriceText by remember { mutableStateOf("") }
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -159,7 +162,7 @@ fun CameraScannerView(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Banner card showcasing Gemma-4 on-device integration
+        // Banner card showcasing Gemini multimodal AI integration
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -199,7 +202,7 @@ fun CameraScannerView(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "GEMMA-4 ON-DEVICE AI AGENT",
+                        text = "GEMINI MULTIMODAL AI AGENT",
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -277,45 +280,81 @@ fun CameraScannerView(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Direct Product Entry",
+                                text = "Enter Real Product Details",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Gemma-4 parses title, specs & pricing on-device",
+                                text = "Specify your product title and real price",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
+                    Text(
+                        text = "Product Name or Title *",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
                     OutlinedTextField(
                         value = typedProductText,
                         onValueChange = { typedProductText = it },
                         placeholder = {
-                            Text("e.g. Sony WH-1000XM5 headphones, Anker 65W GaN, Logitech mouse...", fontSize = 13.sp)
+                            Text("e.g. Sony WH-1000XM5, AirPods Pro, Logitech Mouse", fontSize = 13.sp)
                         },
-                        trailingIcon = {
-                            if (typedProductText.isNotEmpty()) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = "Search",
-                                    tint = PayPalBlue,
-                                    modifier = Modifier.clickable {
-                                        keyboardController?.hide()
-                                        onTextSubmitted(typedProductText)
-                                    }
-                                )
-                            }
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PayPalNavy,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("product_title_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Price in USD ($) *",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = typedPriceText,
+                        onValueChange = { input ->
+                            // Allow numbers and decimal points only
+                            typedPriceText = input.filter { it.isDigit() || it == '.' }
                         },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = {
+                        placeholder = {
+                            Text("e.g. 199.99 (or leave blank to estimate with Gemini)", fontSize = 13.sp)
+                        },
+                        leadingIcon = {
+                            Text("$", fontWeight = FontWeight.Bold, color = PayPalNavy, fontSize = 16.sp)
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = {
                             keyboardController?.hide()
                             if (typedProductText.isNotBlank()) {
-                                onTextSubmitted(typedProductText)
+                                val submission = if (typedPriceText.isNotBlank()) {
+                                    "${typedProductText.trim()} $${typedPriceText.trim()}"
+                                } else {
+                                    typedProductText.trim()
+                                }
+                                onTextSubmitted(submission)
                             }
                         }),
                         shape = RoundedCornerShape(14.dp),
@@ -325,61 +364,20 @@ fun CameraScannerView(
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("product_text_input")
+                            .testTag("product_price_input")
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Quick Suggestion Prompts:",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Suggestion prompt chips
-                    val suggestions = listOf(
-                        "Sony WH-1000XM5 ANC",
-                        "Anker Prime 65W GaN",
-                        "Logitech MX Master 3S",
-                        "DJI Mini 4 Pro Drone",
-                        "Apple Watch Ultra 2",
-                        "Yeti 20 oz Rambler"
-                    )
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(suggestions) { suggestion ->
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = PayPalLightBlue.copy(alpha = 0.12f),
-                                modifier = Modifier.clickable {
-                                    typedProductText = suggestion
-                                    keyboardController?.hide()
-                                    onTextSubmitted(suggestion)
-                                }
-                            ) {
-                                Text(
-                                    text = suggestion,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = PayPalNavy,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     Button(
                         onClick = {
                             keyboardController?.hide()
-                            onTextSubmitted(typedProductText)
+                            val submission = if (typedPriceText.isNotBlank()) {
+                                "${typedProductText.trim()} $${typedPriceText.trim()}"
+                            } else {
+                                typedProductText.trim()
+                            }
+                            onTextSubmitted(submission)
                         },
                         enabled = typedProductText.isNotBlank(),
                         shape = RoundedCornerShape(16.dp),
@@ -389,10 +387,10 @@ fun CameraScannerView(
                             .height(52.dp)
                             .testTag("submit_text_button")
                     ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White)
+                        Icon(Icons.Default.ShoppingBag, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Analyze with Gemma-4",
+                            text = if (typedPriceText.isNotBlank()) "Proceed to PayPal Checkout ($${typedPriceText.trim()})" else "Analyze & Calculate with Gemini AI",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -403,27 +401,27 @@ fun CameraScannerView(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Gemma-4 Feature Highlights Card
+            // Gemini Intelligence Card
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = AccentSuccess.copy(alpha = 0.08f)),
+                colors = CardDefaults.cardColors(containerColor = PayPalLightBlue.copy(alpha = 0.08f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Bolt, contentDescription = null, tint = AccentSuccess, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PayPalBlue, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Zero Cloud API Keys Required",
+                            text = "Google Gemini Intelligence",
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
-                            color = Color(0xFF2E7D32)
+                            color = PayPalNavy
                         )
                         Text(
-                            text = "Gemma-4 runs locally on your device for sub-second intent extraction and 1-click PayPal checkout.",
+                            text = "Gemini multimodal vision and text processing with 1-click PayPal sandbox checkout.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -597,7 +595,7 @@ fun CameraScannerView(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "GEMMA-4 MULTIMODAL LENS",
+                                text = "GEMINI MULTIMODAL LENS",
                                 color = Color.White,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,

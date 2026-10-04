@@ -49,7 +49,7 @@ def health_check():
     return jsonify({
         "status": "online",
         "service": "AgentCart AI Multi-Agent Backend",
-        "models": ["gemma-4", "gemini-flash-latest", "gemini-3.8-flash"],
+        "models": ["gemini-flash-latest", "gemini-3.5-flash"],
         "gemini_configured": bool(GEMINI_KEY),
         "paypal_configured": bool(PAYPAL_CLIENT_ID and PAYPAL_SECRET),
         "channel3_configured": bool(CHANNEL3_API_KEY),
@@ -60,53 +60,117 @@ def health_check():
 def process_text_intent():
     try:
         body = request.get_json(silent=True) or {}
-        query = body.get("query", "").strip()
-        if not query:
-            return jsonify({"status": "FAILED", "error": "No product query text provided"}), 400
-
-        lower = query.lower()
-        category = "Consumer Goods"
-        if any(w in lower for w in ["headphone", "earbud", "audio", "sound", "speaker", "airpod"]):
-            category = "Audio & Headphones"
-        elif any(w in lower for w in ["charger", "gan", "cable", "power", "battery"]):
-            category = "Charging & Power"
-        elif any(w in lower for w in ["mouse", "keyboard", "monitor", "laptop", "trackpad"]):
-            category = "Computer Accessories"
-        elif any(w in lower for w in ["camera", "drone", "gimbal", "dji", "lens"]):
-            category = "Cameras & Optics"
-        elif any(w in lower for w in ["watch", "band", "fitbit", "tracker"]):
-            category = "Wearables & Smartwatches"
+        query = str(body.get("query", "")).strip()
+        custom_price = str(body.get("price", "")).strip()
+        custom_category = str(body.get("category", "")).strip()
 
         import re
-        price_match = re.search(r'\$(\d+(?:\.\d{2})?)', query)
-        price = ("$" + price_match.group(1)) if price_match else "$49.99"
-        if not price_match:
-            if "xm5" in lower or "sony" in lower:
-                price = "$348.00"
-            elif "mx master" in lower:
-                price = "$99.99"
-            elif "anker" in lower or "65w" in lower:
-                price = "$39.99"
-            elif "dji" in lower:
-                price = "$669.00"
-            elif "airpod" in lower:
-                price = "$249.00"
+        price = ""
+        if custom_price:
+            price = "$" + custom_price.replace("$", "").strip()
+        else:
+            match = re.search(r'\$(\d+(?:\.\d{1,2})?)', query)
+            if match:
+                price = "$" + match.group(1)
 
-        title = query.replace(price, "").strip()
-        if not title:
-            title = query
+        product_title = query
+        if price and not custom_price:
+            product_title = query.replace(price, "").strip()
+
+        if not product_title and not query:
+            return jsonify({
+                "status": "FAILED",
+                "error": "Please enter a product title or name."
+            }), 400
+
+        # If user provided a price directly with the title, use their exact real data:
+        if product_title and price:
+            category = custom_category if custom_category else "Commercial Goods"
+            return jsonify({
+                "id": f"ITEM-{abs(hash(product_title + price)) % 100000}",
+                "title": product_title,
+                "price": price,
+                "confidenceScore": "User Specified",
+                "merchantName": "PayPal Direct Checkout",
+                "description": f"Product: {product_title} at {price}.",
+                "category": category,
+                "currency": "USD",
+                "visionModel": "User Specified",
+                "geminiRawOutput": f"{product_title} | {price} | {category}",
+                "geminiStatus": "SUCCESS"
+            })
+
+        # If price was NOT provided, use Gemini API to identify product specs & price
+        if not GEMINI_KEY:
+            return jsonify({
+                "status": "FAILED",
+                "error": "No price entered and GEMINI_API_KEY is not configured on the backend. Please enter the price in the Price field."
+            }), 400
+
+        custom_model = os.getenv("GEMINI_MODEL", "").strip()
+        candidate_models = [m for m in [custom_model, "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-pro"] if m]
+        prompt = (
+            f"You are an AI commerce checkout assistant. The user wants to buy: '{query}'. "
+            "Identify the brand, exact product title, realistic retail price in USD, and category. "
+            "Output ONLY a single line in this format: <Brand & Model Title> | <Price e.g. $199.99> | <Category>. "
+            "Do NOT include explanation, quotes, or markdown."
+        )
+
+        gemini_response = None
+        used_model_name = ""
+        last_error = None
+
+        for model_name in candidate_models:
+            try:
+                text_model = genai.GenerativeModel(model_name)
+                res = text_model.generate_content(prompt)
+                if res and res.text:
+                    gemini_response = res
+                    used_model_name = model_name
+                    break
+            except Exception as e:
+                last_error = e
+                continue
+
+        if not gemini_response or not used_model_name:
+            err_str = str(last_error) if last_error else "Unknown Gemini error"
+            if "403" in err_str or "denied access" in err_str.lower():
+                return jsonify({
+                    "status": "FAILED",
+                    "error": (
+                        "Gemini API 403 (Permission Denied): Your project has been denied access. "
+                        "Please enter the product price in the Price field or use a personal @gmail.com API key."
+                    ),
+                    "details": err_str
+                }), 403
+            return jsonify({
+                "status": "FAILED",
+                "error": f"Gemini API Error: {err_str}. Please enter the product price manually in the Price field."
+            }), 500
+
+        raw_text = gemini_response.text.strip()
+        parts = [p.strip() for p in raw_text.split("|")]
+        extracted_title = parts[0] if len(parts) >= 1 and parts[0] else query
+        extracted_price = parts[1] if len(parts) >= 2 and "$" in parts[1] else ""
+        extracted_category = parts[2] if len(parts) >= 3 and parts[2] else "General"
+
+        if not extracted_price:
+            return jsonify({
+                "status": "FAILED",
+                "error": f"Gemini returned: '{raw_text}', but could not determine a valid price. Please enter the price in the Price field."
+            }), 422
 
         return jsonify({
-            "id": f"GEMMA-{abs(hash(title)) % 100000}",
-            "title": title.title(),
-            "price": price,
-            "confidenceScore": "99.2% Gemma-4 Semantic Intent Match",
-            "merchantName": "Verified Channel3 Merchant Node",
-            "description": f"Gemma-4 extracted product specifications for '{title}'. Ready for 1-click PayPal sandbox checkout.",
-            "category": category,
+            "id": f"GEMINI-{abs(hash(extracted_title)) % 100000}",
+            "title": extracted_title,
+            "price": extracted_price,
+            "confidenceScore": f"Google {used_model_name}",
+            "merchantName": "PayPal Direct Checkout",
+            "description": f"Product identified by Google Gemini: {extracted_title}",
+            "category": extracted_category,
             "currency": "USD",
-            "visionModel": "Gemma-4 Intent Engine",
-            "geminiRawOutput": f"Gemma-4 text parsing: query='{query}' -> title='{title}', price='{price}'",
+            "visionModel": used_model_name,
+            "geminiRawOutput": raw_text,
             "geminiStatus": "SUCCESS"
         })
     except Exception as e:
@@ -129,10 +193,9 @@ def process_agent_intent():
                 "error": "GEMINI_API_KEY is not configured on Render. Please add your GEMINI_API_KEY in Render Dashboard -> Environment Variables to enable live image recognition."
             }), 400
         
-        # Multi-modal Vision Processing using modern Gemini Flash models
-        # Uses gemini-flash-latest and gemini-3.5-flash with auto-fallback
+        # Multi-modal Vision Processing using standard Gemini Flash models
         custom_model = os.getenv("GEMINI_MODEL", "").strip()
-        candidate_models = [m for m in [custom_model, "gemini-flash-latest", "gemini-3.5-flash"] if m]
+        candidate_models = [m for m in [custom_model, "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-pro"] if m]
         
         gemini_response = None
         used_model_name = ""
@@ -161,9 +224,21 @@ def process_agent_intent():
                 continue
 
         if not gemini_response or not used_model_name:
+            err_str = str(last_error)
+            if "403" in err_str or "denied access" in err_str.lower():
+                guidance = (
+                    "Gemini 403 (Permission Denied): 'Your project has been denied access'.\n"
+                    "Reason: This typically occurs if your GEMINI_API_KEY was generated using an institutional / college Google account (@sakec.ac.in), which restricts Generative Language API access, or if the GCP project has API restrictions.\n\n"
+                    "Solution: Generate a fresh Gemini API key using a personal @gmail.com account at https://aistudio.google.com/apikey, then update GEMINI_API_KEY in your Render Dashboard."
+                )
+                return jsonify({
+                    "status": "FAILED",
+                    "error": guidance,
+                    "details": err_str
+                }), 403
             return jsonify({
                 "status": "FAILED",
-                "error": f"Gemini Vision API Error: {str(last_error)}"
+                "error": f"Gemini Vision API Error: {err_str}"
             }), 500
 
         raw_text = gemini_response.text.strip()
@@ -183,8 +258,8 @@ def process_agent_intent():
             "id": f"AI-{abs(hash(product_title)) % 100000}",
             "title": product_title,
             "price": price,
-            "confidenceScore": f"99% {used_model_name} Match",
-            "merchantName": "Verified Channel3 Merchant Node",
+            "confidenceScore": f"Google {used_model_name}",
+            "merchantName": "Direct Checkout",
             "description": f"Real-time product identification powered by Google Gemini ({used_model_name}) multimodal vision.",
             "category": category,
             "currency": "USD",
