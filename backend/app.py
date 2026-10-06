@@ -44,6 +44,49 @@ def get_paypal_access_token():
     except Exception as e:
         return None, str(e)
 
+def extract_price_value(p):
+    """
+    Safely extracts a formatted price string (e.g. '$529.00') from Channel3 price data,
+    which can be a dictionary ({'price': 529.0, 'compare_at_price': None, 'currency': 'USD'}),
+    a float/int (529.0), a raw string ('529.00'), or a stringified dict.
+    """
+    if p is None:
+        return None
+    if isinstance(p, dict):
+        val = p.get("price") or p.get("amount") or p.get("value")
+        return extract_price_value(val)
+    if isinstance(p, (int, float)):
+        return f"${float(p):.2f}"
+    if isinstance(p, str):
+        p_str = p.strip()
+        if p_str.startswith("{") and "price" in p_str:
+            import ast
+            try:
+                d = ast.literal_eval(p_str)
+                if isinstance(d, dict):
+                    return extract_price_value(d.get("price"))
+            except Exception:
+                pass
+        p_clean = p_str.replace("$", "").replace(",", "").strip()
+        try:
+            return f"${float(p_clean):.2f}"
+        except Exception:
+            import re
+            match = re.search(r'(\d+(?:\.\d{1,2})?)', p_clean)
+            if match:
+                try:
+                    return f"${float(match.group(1)):.2f}"
+                except Exception:
+                    return f"${match.group(1)}"
+    return None
+
+def extract_name_value(val, default=""):
+    if isinstance(val, dict):
+        return val.get("name") or val.get("title") or val.get("merchant") or default
+    if val:
+        return str(val)
+    return default
+
 def query_channel3_catalog(query):
     """
     Queries Channel3 Universal Product Catalog API (trychannel3.com)
@@ -63,44 +106,38 @@ def query_channel3_catalog(query):
             products = data.get("products") or data.get("results") or data.get("items") or []
             if products and isinstance(products, list):
                 top = products[0]
-                t = top.get("title") or top.get("name") or str(query)
+                t = extract_name_value(top.get("title") or top.get("name"), str(query))
                 p = top.get("price") or top.get("sale_price") or top.get("current_price")
-                m = top.get("merchant") or top.get("store") or top.get("retailer") or top.get("brand") or "Best Buy"
-                b = top.get("brand") or top.get("manufacturer") or (t.split()[0] if t else "")
-                cat = top.get("category") or "Consumer Electronics"
-                avail = top.get("availability") or "In Stock (Ready to Ship)"
-                
-                price_str = None
-                if p:
-                    p_clean = str(p).replace("$", "").strip()
-                    try:
-                        price_str = f"${float(p_clean):.2f}"
-                    except:
-                        price_str = f"${p_clean}"
+                m = extract_name_value(top.get("merchant") or top.get("store") or top.get("retailer") or top.get("brand"), "Best Buy")
+                b = extract_name_value(top.get("brand") or top.get("manufacturer"), t.split()[0] if t else "")
+                cat = extract_name_value(top.get("category"), "Consumer Electronics")
+                avail = extract_name_value(top.get("availability"), "In Stock (Ready to Ship)")
+
+                price_str = extract_price_value(p)
 
                 # Extract merchant offers list
                 offers = []
                 raw_offers = top.get("offers") or top.get("merchants") or []
                 if raw_offers and isinstance(raw_offers, list):
                     for off in raw_offers[:4]:
-                        off_m = off.get("merchant") or off.get("store") or off.get("name") or m
+                        off_m = extract_name_value(off.get("merchant") or off.get("store") or off.get("name"), m)
                         off_p = off.get("price") or off.get("amount") or p
-                        off_p_str = f"${float(str(off_p).replace('$', '').strip()):.2f}" if off_p else price_str
+                        off_p_str = extract_price_value(off_p) or price_str
                         offers.append({
                             "merchant": str(off_m),
-                            "price": str(off_p_str),
+                            "price": str(off_p_str or ""),
                             "availability": str(off.get("availability") or "In Stock"),
                             "shipping": str(off.get("shipping") or "Free Express Delivery"),
                             "condition": str(off.get("condition") or "Brand New")
                         })
                 elif len(products) > 1:
                     for prod in products[:3]:
-                        prod_m = prod.get("merchant") or prod.get("retailer") or prod.get("store") or prod.get("brand") or "Partner Store"
+                        prod_m = extract_name_value(prod.get("merchant") or prod.get("retailer") or prod.get("store") or prod.get("brand"), "Partner Store")
                         prod_p = prod.get("price") or p
-                        prod_p_str = f"${float(str(prod_p).replace('$', '').strip()):.2f}" if prod_p else price_str
+                        prod_p_str = extract_price_value(prod_p) or price_str
                         offers.append({
                             "merchant": str(prod_m),
-                            "price": str(prod_p_str),
+                            "price": str(prod_p_str or ""),
                             "availability": "In Stock",
                             "shipping": "Free 2-Day Shipping",
                             "condition": "Brand New"
