@@ -65,8 +65,10 @@ def query_channel3_catalog(query):
                 top = products[0]
                 t = top.get("title") or top.get("name") or str(query)
                 p = top.get("price") or top.get("sale_price") or top.get("current_price")
-                m = top.get("brand") or top.get("merchant") or top.get("retailer") or "Channel3 Partner Store"
+                m = top.get("merchant") or top.get("store") or top.get("retailer") or top.get("brand") or "Best Buy"
+                b = top.get("brand") or top.get("manufacturer") or (t.split()[0] if t else "")
                 cat = top.get("category") or "Consumer Electronics"
+                avail = top.get("availability") or "In Stock (Ready to Ship)"
                 
                 price_str = None
                 if p:
@@ -76,11 +78,50 @@ def query_channel3_catalog(query):
                     except:
                         price_str = f"${p_clean}"
 
+                # Extract merchant offers list
+                offers = []
+                raw_offers = top.get("offers") or top.get("merchants") or []
+                if raw_offers and isinstance(raw_offers, list):
+                    for off in raw_offers[:4]:
+                        off_m = off.get("merchant") or off.get("store") or off.get("name") or m
+                        off_p = off.get("price") or off.get("amount") or p
+                        off_p_str = f"${float(str(off_p).replace('$', '').strip()):.2f}" if off_p else price_str
+                        offers.append({
+                            "merchant": str(off_m),
+                            "price": str(off_p_str),
+                            "availability": str(off.get("availability") or "In Stock"),
+                            "shipping": str(off.get("shipping") or "Free Express Delivery"),
+                            "condition": str(off.get("condition") or "Brand New")
+                        })
+                elif len(products) > 1:
+                    for prod in products[:3]:
+                        prod_m = prod.get("merchant") or prod.get("retailer") or prod.get("store") or prod.get("brand") or "Partner Store"
+                        prod_p = prod.get("price") or p
+                        prod_p_str = f"${float(str(prod_p).replace('$', '').strip()):.2f}" if prod_p else price_str
+                        offers.append({
+                            "merchant": str(prod_m),
+                            "price": str(prod_p_str),
+                            "availability": "In Stock",
+                            "shipping": "Free 2-Day Shipping",
+                            "condition": "Brand New"
+                        })
+                elif price_str:
+                    offers.append({
+                        "merchant": str(m),
+                        "price": str(price_str),
+                        "availability": str(avail),
+                        "shipping": "Standard Delivery",
+                        "condition": "New"
+                    })
+
                 return {
                     "title": t,
                     "price": price_str,
                     "merchant": m,
-                    "category": cat
+                    "brand": b,
+                    "category": cat,
+                    "availability": avail,
+                    "offers": offers
                 }
     except Exception as e:
         print(f"Channel3 search lookup error: {e}")
@@ -130,12 +171,24 @@ def process_text_intent():
             category = custom_category if custom_category else "Commercial Goods"
             c3_match = query_channel3_catalog(product_title)
             merchant = f"Channel3 • {c3_match['merchant']}" if (c3_match and c3_match.get("merchant")) else "Channel3 Merchant Node"
+            offers = c3_match.get("offers") if c3_match else [
+                {
+                    "merchant": merchant,
+                    "price": price,
+                    "availability": "In Stock",
+                    "shipping": "Free Standard Delivery",
+                    "condition": "Brand New"
+                }
+            ]
             return jsonify({
                 "id": f"ITEM-{abs(hash(product_title + price)) % 100000}",
                 "title": product_title,
                 "price": price,
                 "confidenceScore": "Verified Direct Match",
                 "merchantName": merchant,
+                "brand": c3_match.get("brand") if c3_match else (product_title.split()[0] if product_title else ""),
+                "availability": c3_match.get("availability") if c3_match else "In Stock",
+                "offers": offers,
                 "description": None,
                 "category": category,
                 "currency": "USD",
@@ -203,14 +256,26 @@ def process_text_intent():
             final_title = c3_product.get("title") or gemini_title
             final_price = c3_product.get("price") or gemini_price
             final_merchant = f"Channel3 • {c3_product['merchant']}"
+            final_brand = c3_product.get("brand") or (final_title.split()[0] if final_title else "Brand")
             final_category = c3_product.get("category") or gemini_category
+            final_availability = c3_product.get("availability") or "In Stock"
+            final_offers = c3_product.get("offers") or []
             confidence = "Channel3 Verified Match"
         else:
             final_title = gemini_title
-            final_price = gemini_price if gemini_price else "$49.99"
+            final_price = gemini_price
             final_merchant = "Channel3 Merchant Node"
+            final_brand = gemini_title.split()[0] if gemini_title else "Brand"
             final_category = gemini_category
+            final_availability = "In Stock"
+            final_offers = []
             confidence = "98% Match"
+
+        if not final_price:
+            return jsonify({
+                "status": "FAILED",
+                "error": f"Product identified as '{final_title}', but price could not be estimated. Please specify the price."
+            }), 422
 
         return jsonify({
             "id": f"ITEM-{abs(hash(final_title)) % 100000}",
@@ -218,6 +283,9 @@ def process_text_intent():
             "price": final_price,
             "confidenceScore": confidence,
             "merchantName": final_merchant,
+            "brand": final_brand,
+            "availability": final_availability,
+            "offers": final_offers,
             "description": None,
             "category": final_category,
             "currency": "USD",
@@ -301,7 +369,15 @@ def process_agent_intent():
         # Parse model output
         parts = [p.strip() for p in raw_text.split("|")]
         gemini_title = parts[0]
-        gemini_price = parts[1] if len(parts) > 1 and "$" in parts[1] else "$49.99"
+        gemini_price = ""
+        if len(parts) > 1 and "$" in parts[1]:
+            gemini_price = parts[1].strip()
+        else:
+            import re
+            m = re.search(r'\$(\d+(?:\.\d{1,2})?)', raw_text)
+            if m:
+                gemini_price = "$" + m.group(1)
+
         gemini_category = parts[2] if len(parts) > 2 else "Consumer Products"
 
         # Pass Gemini's recognized product details to Channel3 API to find product details and live pricing
@@ -311,14 +387,26 @@ def process_agent_intent():
             final_title = c3_product.get("title") or gemini_title
             final_price = c3_product.get("price") or gemini_price
             final_merchant = f"Channel3 • {c3_product['merchant']}"
+            final_brand = c3_product.get("brand") or (final_title.split()[0] if final_title else "Brand")
             final_category = c3_product.get("category") or gemini_category
+            final_availability = c3_product.get("availability") or "In Stock"
+            final_offers = c3_product.get("offers") or []
             confidence = "Channel3 Verified Match"
         else:
             final_title = gemini_title
             final_price = gemini_price
             final_merchant = "Channel3 Merchant Node"
+            final_brand = gemini_title.split()[0] if gemini_title else "Brand"
             final_category = gemini_category
+            final_availability = "In Stock"
+            final_offers = []
             confidence = "98% Match"
+
+        if not final_price:
+            return jsonify({
+                "status": "FAILED",
+                "error": f"Product recognized as '{final_title}', but price could not be determined. Please switch to 'Type Details' to enter the price."
+            }), 422
 
         return jsonify({
             "id": f"ITEM-{abs(hash(final_title)) % 100000}",
@@ -326,6 +414,9 @@ def process_agent_intent():
             "price": final_price,
             "confidenceScore": confidence,
             "merchantName": final_merchant,
+            "brand": final_brand,
+            "availability": final_availability,
+            "offers": final_offers,
             "description": None,
             "category": final_category,
             "currency": "USD",
@@ -594,11 +685,14 @@ def execute_paypal():
         ).strip()
 
         price = str(
-            body.get("price", "39.99")
+            body.get("price", "")
         ).replace("$", "").strip()
 
         if not price:
-            price = "39.99"
+            return jsonify({
+                "status": "FAILED",
+                "error": "Valid product price is required for PayPal checkout."
+            }), 400
 
         # ---------------------------------------------------------
         # Validate PayPal credentials

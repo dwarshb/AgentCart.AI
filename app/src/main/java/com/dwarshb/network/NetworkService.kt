@@ -12,6 +12,14 @@ import retrofit2.http.Body
 import retrofit2.http.POST
 import java.util.concurrent.TimeUnit
 
+data class Channel3Offer(
+    @SerializedName("merchant") val merchant: String,
+    @SerializedName("price") val price: String,
+    @SerializedName("availability") val availability: String? = "In Stock",
+    @SerializedName("shipping") val shipping: String? = null,
+    @SerializedName("condition") val condition: String? = "New"
+)
+
 data class DiscoveredProduct(
     @SerializedName("id") val id: String,
     @SerializedName("title") val title: String,
@@ -24,7 +32,10 @@ data class DiscoveredProduct(
     @SerializedName("currency") val currency: String? = "USD",
     @SerializedName("visionModel") val visionModel: String? = null,
     @SerializedName("geminiRawOutput") val geminiRawOutput: String? = null,
-    @SerializedName("geminiStatus") val geminiStatus: String? = null
+    @SerializedName("geminiStatus") val geminiStatus: String? = null,
+    @SerializedName("brand") val brand: String? = null,
+    @SerializedName("availability") val availability: String? = null,
+    @SerializedName("offers") val offers: List<Channel3Offer>? = null
 )
 
 data class PaymentResponse(

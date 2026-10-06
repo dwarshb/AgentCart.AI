@@ -200,7 +200,11 @@ object PayPalSandboxClient {
         val accessToken = tokenData.accessToken ?: throw PayPalApiException("PayPal returned no access_token in response: $tokenResponseBody")
 
         // Step 2: Create Order with CAPTURE Intent on PayPal Sandbox
-        val numericPrice = priceString.replace("$", "").trim().ifBlank { "39.99" }
+        val cleanPrice = priceString.replace("$", "").trim()
+        if (cleanPrice.isBlank()) {
+            throw PayPalApiException("Valid product price is required for PayPal checkout.")
+        }
+        val numericPrice = cleanPrice
         val orderJson = """
             {
                 "intent": "CAPTURE",
