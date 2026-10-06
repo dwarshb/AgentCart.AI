@@ -1,4 +1,4 @@
-package com.example.ui.components
+package com.dwarshb.ui.components
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -91,11 +91,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.example.R
-import com.example.ui.theme.AccentSuccess
-import com.example.ui.theme.PayPalBlue
-import com.example.ui.theme.PayPalLightBlue
-import com.example.ui.theme.PayPalNavy
+import com.dwarshb.R
+import com.dwarshb.ui.theme.AccentSuccess
+import com.dwarshb.ui.theme.PayPalBlue
+import com.dwarshb.ui.theme.PayPalLightBlue
+import com.dwarshb.ui.theme.PayPalNavy
 import java.io.File
 
 @Composable

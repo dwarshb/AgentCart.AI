@@ -1,6 +1,6 @@
-package com.example.data
+package com.dwarshb.data
 
-import com.example.network.DiscoveredProduct
+import com.dwarshb.network.DiscoveredProduct
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

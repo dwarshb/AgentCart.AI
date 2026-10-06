@@ -1,7 +1,7 @@
-package com.example.network
+package com.dwarshb.network
 
 import android.util.Base64
-import com.example.BuildConfig
+import com.dwarshb.BuildConfig
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers

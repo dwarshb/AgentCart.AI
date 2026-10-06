@@ -1,4 +1,4 @@
-package com.example.network
+package com.dwarshb.network
 
 import com.google.gson.annotations.SerializedName
 import okhttp3.MediaType.Companion.toMediaTypeOrNull

@@ -1,4 +1,4 @@
-package com.example.utils
+package com.dwarshb.utils
 
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt

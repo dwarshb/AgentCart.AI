@@ -1,4 +1,4 @@
-package com.example.ui.components
+package com.dwarshb.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -37,10 +37,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.OrderHistoryRepository
-import com.example.ui.theme.AccentSuccess
-import com.example.ui.theme.PayPalBlue
-import com.example.ui.theme.PayPalNavy
+import com.dwarshb.data.OrderHistoryRepository
+import com.dwarshb.ui.theme.AccentSuccess
+import com.dwarshb.ui.theme.PayPalBlue
+import com.dwarshb.ui.theme.PayPalNavy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

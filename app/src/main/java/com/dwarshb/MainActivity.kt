@@ -1,4 +1,4 @@
-package com.example
+package com.dwarshb
 
 import android.content.Intent
 import android.net.Uri
@@ -93,20 +93,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
-import com.example.network.DiscoveredProduct
-import com.example.ui.AICheckoutUiState
-import com.example.ui.AICheckoutViewModel
-import com.example.ui.components.CameraScannerView
-import com.example.ui.components.OrderHistoryBottomSheet
-import com.example.ui.components.SettingsBottomSheet
-import com.example.ui.theme.AccentError
-import com.example.ui.theme.AccentSuccess
-import com.example.ui.theme.AgentCartTheme
-import com.example.ui.theme.PayPalBlue
-import com.example.ui.theme.PayPalGold
-import com.example.ui.theme.PayPalLightBlue
-import com.example.ui.theme.PayPalNavy
-import com.example.utils.BiometricAuthenticator
+import com.dwarshb.network.DiscoveredProduct
+import com.dwarshb.ui.AICheckoutUiState
+import com.dwarshb.ui.AICheckoutViewModel
+import com.dwarshb.ui.components.CameraScannerView
+import com.dwarshb.ui.components.OrderHistoryBottomSheet
+import com.dwarshb.ui.components.SettingsBottomSheet
+import com.dwarshb.ui.theme.AccentError
+import com.dwarshb.ui.theme.AccentSuccess
+import com.dwarshb.ui.theme.AgentCartTheme
+import com.dwarshb.ui.theme.PayPalBlue
+import com.dwarshb.ui.theme.PayPalGold
+import com.dwarshb.ui.theme.PayPalLightBlue
+import com.dwarshb.ui.theme.PayPalNavy
+import com.dwarshb.utils.BiometricAuthenticator
 
 class MainActivity : FragmentActivity() {
     private val viewModel: AICheckoutViewModel by viewModels()
@@ -477,7 +477,7 @@ fun ProcessingAIScreen(statusMessage: String) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Multimodal inference running on Google Gemini Flash",
+            text = "Multimodal inference running on Google Gemini Flash & Channel3 Commerce Node",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center

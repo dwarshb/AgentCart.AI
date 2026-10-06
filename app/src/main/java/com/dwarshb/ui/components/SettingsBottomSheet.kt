@@ -1,4 +1,4 @@
-package com.example.ui.components
+package com.dwarshb.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -61,12 +61,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.network.ConnectionTestResult
-import com.example.network.PayPalSandboxClient
-import com.example.ui.theme.AccentError
-import com.example.ui.theme.AccentSuccess
-import com.example.ui.theme.PayPalBlue
-import com.example.ui.theme.PayPalNavy
+import com.dwarshb.network.ConnectionTestResult
+import com.dwarshb.network.PayPalSandboxClient
+import com.dwarshb.ui.theme.AccentError
+import com.dwarshb.ui.theme.AccentSuccess
+import com.dwarshb.ui.theme.PayPalBlue
+import com.dwarshb.ui.theme.PayPalNavy
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -1,11 +1,11 @@
-package com.example.ui
+package com.dwarshb.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.OrderHistoryRepository
-import com.example.data.OrderRecord
-import com.example.network.DiscoveredProduct
-import com.example.network.NetworkClient
+import com.dwarshb.data.OrderHistoryRepository
+import com.dwarshb.data.OrderRecord
+import com.dwarshb.network.DiscoveredProduct
+import com.dwarshb.network.NetworkClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
