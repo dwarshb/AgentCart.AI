@@ -202,7 +202,7 @@ fun CameraScannerView(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "GEMINI MULTIMODAL AI AGENT",
+                        text = "GEMINI 3.5 FLASH MULTIMODAL VISION",
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -390,7 +390,7 @@ fun CameraScannerView(
                         Icon(Icons.Default.ShoppingBag, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (typedPriceText.isNotBlank()) "Proceed to PayPal Checkout ($${typedPriceText.trim()})" else "Analyze & Calculate with Gemini AI",
+                            text = if (typedPriceText.isNotBlank()) "Proceed to PayPal Checkout ($${typedPriceText.trim()})" else "Analyze & Lookup via Channel3",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -401,7 +401,7 @@ fun CameraScannerView(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Gemini Intelligence Card
+            // Gemini 3.5 Flash Intelligence Card
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = PayPalLightBlue.copy(alpha = 0.08f)),
@@ -415,13 +415,13 @@ fun CameraScannerView(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Google Gemini Intelligence",
+                            text = "Google Gemini 3.5 Flash • Multimodal Vision",
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
                             color = PayPalNavy
                         )
                         Text(
-                            text = "Gemini multimodal vision and text processing with 1-click PayPal sandbox checkout.",
+                            text = "Powered by Google Gemini multimodal AI with Channel3 merchant catalog live pricing and 1-click PayPal checkout.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -595,7 +595,7 @@ fun CameraScannerView(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "GEMINI MULTIMODAL LENS",
+                                text = "GEMINI 3.5 FLASH LENS",
                                 color = Color.White,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,

@@ -73,6 +73,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,15 +90,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import com.dwarshb.auth.PayPalAuthManager
 import com.dwarshb.network.DiscoveredProduct
 import com.dwarshb.ui.AICheckoutUiState
 import com.dwarshb.ui.AICheckoutViewModel
 import com.dwarshb.ui.components.CameraScannerView
 import com.dwarshb.ui.components.OrderHistoryBottomSheet
+import com.dwarshb.ui.components.PayPalSignInBottomSheet
 import com.dwarshb.ui.components.SettingsBottomSheet
 import com.dwarshb.ui.theme.AccentError
 import com.dwarshb.ui.theme.AccentSuccess
@@ -151,15 +153,22 @@ class MainActivity : FragmentActivity() {
 fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentActivity) {
     val uiState by viewModel.uiState.collectAsState()
     val backendUrl by viewModel.backendUrl.collectAsState()
-    val useFallback by viewModel.useSandboxFallback.collectAsState()
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showHistorySheet by remember { mutableStateOf(false) }
+    var showPayPalSignInSheet by remember { mutableStateOf(false) }
+
+    val currentUser by PayPalAuthManager.currentUser.collectAsState()
 
     // Fallback confirmation dialog if biometric hardware unavailable on emulator
     var showBiometricFallbackDialog by remember { mutableStateOf<DiscoveredProduct?>(null) }
     
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        PayPalAuthManager.init(context)
+        viewModel.refreshGeminiStatus()
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -213,6 +222,43 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                     }
                 },
                 actions = {
+                    // PayPal Sign-In / Account pill
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (currentUser.isSignedIn) PayPalNavy.copy(alpha = 0.08f) else PayPalNavy,
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .clickable { showPayPalSignInSheet = true }
+                            .testTag("action_paypal_signin_button")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = if (currentUser.isSignedIn) PayPalNavy else PayPalGold,
+                                modifier = Modifier.size(18.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "P",
+                                        color = if (currentUser.isSignedIn) PayPalGold else PayPalNavy,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (currentUser.isSignedIn) currentUser.name.substringBefore(" ") else "PayPal Sign In",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (currentUser.isSignedIn) PayPalNavy else Color.White
+                            )
+                        }
+                    }
+
                     IconButton(
                         onClick = { showHistorySheet = true },
                         modifier = Modifier.testTag("action_history_button")
@@ -252,6 +298,7 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
 
             Crossfade(targetState = uiState, label = "StateTransition") { state ->
                 when (state) {
+
                     is AICheckoutUiState.Idle -> {
                         CameraScannerView(
                             onImageCaptured = { bytes ->
@@ -286,7 +333,8 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                                     }
                                 )
                             },
-                            onBackToCamera = { viewModel.resetState() }
+                            onBackToCamera = { viewModel.resetState() },
+                            onOpenPayPalSignIn = { showPayPalSignInSheet = true }
                         )
                     }
 
@@ -367,7 +415,7 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
-                            text = "Emulator Mode: Biometric hardware bypassed with secure token",
+                            text = "Payment Security: Encrypted PayPal Sandbox Order Authorization",
                             fontSize = 11.sp,
                             color = PayPalNavy,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -403,10 +451,19 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
     if (showSettingsSheet) {
         SettingsBottomSheet(
             currentUrl = backendUrl,
-            useFallback = useFallback,
             onSaveUrl = { viewModel.updateBackendUrl(it) },
-            onToggleFallback = { viewModel.setSandboxFallback(it) },
-            onDismiss = { showSettingsSheet = false }
+            onDismiss = { showSettingsSheet = false },
+            viewModel = viewModel,
+            onOpenPayPalSignIn = {
+                showSettingsSheet = false
+                showPayPalSignInSheet = true
+            }
+        )
+    }
+
+    if (showPayPalSignInSheet) {
+        PayPalSignInBottomSheet(
+            onDismiss = { showPayPalSignInSheet = false }
         )
     }
 
@@ -477,7 +534,7 @@ fun ProcessingAIScreen(statusMessage: String) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Multimodal inference running on Google Gemini Flash & Channel3 Commerce Node",
+            text = "Google Gemini 3.5 Flash Multimodal AI & Channel3 Commerce Integration",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -490,7 +547,8 @@ fun ReviewMatchScreen(
     product: DiscoveredProduct,
     source: String,
     onPayClicked: () -> Unit,
-    onBackToCamera: () -> Unit
+    onBackToCamera: () -> Unit,
+    onOpenPayPalSignIn: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -775,6 +833,57 @@ fun ReviewMatchScreen(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
+            val currentUser by PayPalAuthManager.currentUser.collectAsState()
+
+            // PayPal Connected Account Bar
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = PayPalNavy.copy(alpha = 0.06f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 14.dp)
+                    .clickable { onOpenPayPalSignIn?.invoke() }
+                    .testTag("review_screen_paypal_account_bar")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = PayPalNavy,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("P", color = PayPalGold, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = if (currentUser.isSignedIn) "Paying as ${currentUser.name}" else "Sign In with PayPal",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PayPalNavy
+                            )
+                            Text(
+                                text = if (currentUser.isSignedIn) "${currentUser.email} • 1-Click Ready" else "Tap to connect your PayPal Sandbox account",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (currentUser.isSignedIn) "Change" else "Sign In",
+                        fontSize = 12.sp,
+                        color = PayPalBlue,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             Button(
                 onClick = onPayClicked,
                 shape = RoundedCornerShape(16.dp),
@@ -792,7 +901,7 @@ fun ReviewMatchScreen(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Biometric Pay with PayPal",
+                    text = if (currentUser.isSignedIn) "1-Click Pay with PayPal" else "Pay with PayPal",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = Color.White

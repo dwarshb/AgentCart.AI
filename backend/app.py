@@ -233,7 +233,27 @@ def process_text_intent():
                 "geminiStatus": "SUCCESS"
             })
 
-        # If price was NOT provided, use Gemini to identify specs, then pass to Channel3
+        # Check Channel3 catalog first for live pricing & verified merchant offers
+        c3_match = query_channel3_catalog(product_title or query)
+        if c3_match and c3_match.get("price"):
+            merchant = f"Channel3 • {c3_match['merchant']}" if c3_match.get("merchant") else "Channel3 Merchant Node"
+            return jsonify({
+                "id": f"ITEM-{abs(hash(c3_match['title'] + c3_match['price'])) % 100000}",
+                "title": c3_match["title"],
+                "price": c3_match["price"],
+                "confidenceScore": "Gemma On-Device + Channel3 Match",
+                "merchantName": merchant,
+                "brand": c3_match.get("brand") or (c3_match["title"].split()[0] if c3_match.get("title") else ""),
+                "availability": c3_match.get("availability") or "In Stock",
+                "offers": c3_match.get("offers") or [],
+                "description": None,
+                "category": c3_match.get("category") or "Commercial Goods",
+                "currency": "USD",
+                "visionModel": "On-Device Gemma 4",
+                "geminiStatus": "CHANNEL3_DIRECT"
+            })
+
+        # If price was NOT provided and Channel3 returned no live price, use Gemini to identify specs
         if not GEMINI_KEY:
             return jsonify({
                 "status": "FAILED",

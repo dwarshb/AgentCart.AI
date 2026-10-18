@@ -12,20 +12,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -41,11 +44,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -61,11 +64,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dwarshb.ai.GeminiVisionService
+import com.dwarshb.auth.PayPalAuthManager
 import com.dwarshb.network.ConnectionTestResult
 import com.dwarshb.network.PayPalSandboxClient
+import com.dwarshb.ui.AICheckoutViewModel
 import com.dwarshb.ui.theme.AccentError
 import com.dwarshb.ui.theme.AccentSuccess
 import com.dwarshb.ui.theme.PayPalBlue
+import com.dwarshb.ui.theme.PayPalGold
 import com.dwarshb.ui.theme.PayPalNavy
 import kotlinx.coroutines.launch
 
@@ -73,16 +80,20 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsBottomSheet(
     currentUrl: String,
-    useFallback: Boolean,
     onSaveUrl: (String) -> Unit,
-    onToggleFallback: (Boolean) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    viewModel: AICheckoutViewModel? = null,
+    onOpenPayPalSignIn: (() -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    val currentUser by PayPalAuthManager.currentUser.collectAsState()
 
     var urlInput by remember { mutableStateOf(currentUrl) }
-    var fallbackEnabled by remember { mutableStateOf(useFallback) }
+    var geminiApiKeyInput by remember { mutableStateOf(GeminiVisionService.effectiveApiKey) }
+    var showGeminiKey by remember { mutableStateOf(false) }
 
     var clientIdInput by remember { mutableStateOf(PayPalSandboxClient.effectiveClientId) }
     var clientSecretInput by remember { mutableStateOf(PayPalSandboxClient.effectiveClientSecret) }
@@ -104,38 +115,238 @@ fun SettingsBottomSheet(
                 .padding(bottom = 36.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            // Header
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .background(PayPalNavy, RoundedCornerShape(10.dp)),
+                        .size(42.dp)
+                        .background(PayPalNavy, RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.CloudQueue,
+                        Icons.Default.Settings,
                         contentDescription = null,
-                        tint = Color.White
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "Backend & PayPal Configuration",
+                        text = "Settings & Configuration",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Live PayPal Sandbox & Render API Integration",
+                        text = "Google Gemini AI, PayPal & Cloud Services",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // ==================== PAYPAL ACCOUNT & SIGN IN SECTION ====================
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = PayPalNavy.copy(alpha = 0.05f)
+                ),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("paypal_account_card")
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = PayPalNavy,
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("P", color = PayPalGold, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "PayPal Account Sign-In",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (currentUser.isSignedIn) "Signed in as ${currentUser.name}" else "Not signed in",
+                                    fontSize = 11.sp,
+                                    color = if (currentUser.isSignedIn) AccentSuccess else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                onDismiss()
+                                onOpenPayPalSignIn?.invoke()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.testTag("manage_paypal_account_button")
+                        ) {
+                            Text(if (currentUser.isSignedIn) "Manage" else "Sign In", fontSize = 12.sp)
+                        }
+                    }
+
+                    if (currentUser.isSignedIn) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = currentUser.email,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = currentUser.linkedPaymentMethod,
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    text = currentUser.balance,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = PayPalNavy
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // ==================== GOOGLE GEMINI AI SECTION ====================
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                ),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("gemini_settings_card")
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = PayPalBlue,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Google Gemini AI Vision",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Multimodal Engine (gemini-3.5-flash)",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = AccentSuccess.copy(alpha = 0.15f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentSuccess, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Ready", color = AccentSuccess, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Gemini API Key (Optional Override)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = geminiApiKeyInput,
+                        onValueChange = {
+                            geminiApiKeyInput = it
+                            GeminiVisionService.customApiKey = it.trim().ifEmpty { null }
+                            viewModel?.refreshGeminiStatus()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("gemini_api_key_input"),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        placeholder = { Text("AIzaSy... (leave blank to use cloud proxy)") },
+                        visualTransformation = if (showGeminiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        leadingIcon = { Icon(Icons.Default.Key, contentDescription = null, tint = PayPalBlue) },
+                        trailingIcon = {
+                            IconButton(onClick = { showGeminiKey = !showGeminiKey }) {
+                                Icon(
+                                    if (showGeminiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = null
+                                )
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (geminiApiKeyInput.isNotBlank() && geminiApiKeyInput != "MY_GEMINI_API_KEY") {
+                            "Direct Gemini 3.5 Flash REST API mode active."
+                        } else {
+                            "Using Render cloud Gemini vision proxy. Enter direct API key above if preferred."
+                        },
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // ==================== PAYPAL SANDBOX CREDENTIALS SECTION ====================
             Card(
@@ -149,7 +360,7 @@ fun SettingsBottomSheet(
                         Icon(
                             Icons.Default.Payment,
                             contentDescription = null,
-                            tint = PayPalBlue,
+                            tint = PayPalNavy,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -162,34 +373,6 @@ fun SettingsBottomSheet(
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
-
-                    // Notice explaining Client ID vs Secret
-                    Surface(
-                        color = PayPalBlue.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = null,
-                                tint = PayPalBlue,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Notice: The Client ID and Secret MUST be different strings. In developer.paypal.com, click 'Show' next to Secret to view your secret string.",
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
                         text = "Client ID",
@@ -204,13 +387,13 @@ fun SettingsBottomSheet(
                             clientIdInput = it
                             testResult = null
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("paypal_client_id_input"),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
                         placeholder = { Text("AR2ia9WXJwvuSI...") }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
                         text = "Client Secret",
@@ -225,23 +408,23 @@ fun SettingsBottomSheet(
                             clientSecretInput = it
                             testResult = null
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("paypal_client_secret_input"),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
-                        placeholder = { Text("Enter PayPal Secret (revealed via 'Show')") },
+                        placeholder = { Text("Enter PayPal Secret") },
                         visualTransformation = if (showSecret) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         trailingIcon = {
                             IconButton(onClick = { showSecret = !showSecret }) {
                                 Icon(
                                     if (showSecret) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (showSecret) "Hide Secret" else "Show Secret"
+                                    contentDescription = null
                                 )
                             }
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Test Connection Button
                     Button(
@@ -260,14 +443,10 @@ fun SettingsBottomSheet(
                         enabled = !isTestingConnection && clientIdInput.isNotBlank() && clientSecretInput.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
                         shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().testTag("test_paypal_connection_button")
                     ) {
                         if (isTestingConnection) {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
-                            )
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Testing Credentials against PayPal...")
                         } else {
@@ -279,7 +458,7 @@ fun SettingsBottomSheet(
 
                     // Diagnostic Test Output
                     testResult?.let { res ->
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Surface(
                             color = if (res.success) AccentSuccess.copy(alpha = 0.12f) else AccentError.copy(alpha = 0.12f),
                             shape = RoundedCornerShape(10.dp),
@@ -302,93 +481,33 @@ fun SettingsBottomSheet(
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = res.message,
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                res.details?.let { det ->
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = det,
-                                        fontSize = 11.sp,
-                                        lineHeight = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Text(text = res.message, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // ==================== RENDER BACKEND URL INPUT ====================
             Text(
-                text = "Optional: Render Backend Base URL",
+                text = "Backend Base URL",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
                 value = urlInput,
                 onValueChange = { urlInput = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("backend_url_input"),
+                modifier = Modifier.fillMaxWidth().testTag("backend_url_input"),
                 placeholder = { Text("https://agentcart-ai.onrender.com") },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Fallback toggle card
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Simulate if PayPal API Fails",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (fallbackEnabled) "Enabled: Fake orders will be generated if PayPal rejects keys." else "Disabled: App will strictly require real PayPal Sandbox confirmation.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = fallbackEnabled,
-                        onCheckedChange = {
-                            fallbackEnabled = it
-                            onToggleFallback(it)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = PayPalBlue
-                        ),
-                        modifier = Modifier.testTag("fallback_toggle_switch")
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Action Buttons
             Row(
@@ -403,6 +522,8 @@ fun SettingsBottomSheet(
                         PayPalSandboxClient.customClientSecret = null
                         clientIdInput = PayPalSandboxClient.effectiveClientId
                         clientSecretInput = PayPalSandboxClient.effectiveClientSecret
+                        GeminiVisionService.customApiKey = null
+                        geminiApiKeyInput = ""
                         testResult = null
                     },
                     modifier = Modifier.weight(1f),
@@ -416,13 +537,13 @@ fun SettingsBottomSheet(
                 Button(
                     onClick = {
                         onSaveUrl(urlInput)
-                        PayPalSandboxClient.customClientId = clientIdInput.trim()
-                        PayPalSandboxClient.customClientSecret = clientSecretInput.trim()
+                        PayPalSandboxClient.customClientId = clientIdInput.trim().ifEmpty { null }
+                        PayPalSandboxClient.customClientSecret = clientSecretInput.trim().ifEmpty { null }
+                        GeminiVisionService.customApiKey = geminiApiKeyInput.trim().ifEmpty { null }
+                        viewModel?.refreshGeminiStatus()
                         onDismiss()
                     },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("save_settings_button"),
+                    modifier = Modifier.weight(1f).testTag("save_settings_button"),
                     colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
                     shape = RoundedCornerShape(12.dp)
                 ) {
