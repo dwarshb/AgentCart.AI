@@ -65,7 +65,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dwarshb.ai.GeminiVisionService
-import com.dwarshb.auth.PayPalAuthManager
 import com.dwarshb.network.ConnectionTestResult
 import com.dwarshb.network.PayPalSandboxClient
 import com.dwarshb.ui.AICheckoutViewModel
@@ -88,8 +87,6 @@ fun SettingsBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
-
-    val currentUser by PayPalAuthManager.currentUser.collectAsState()
 
     var urlInput by remember { mutableStateOf(currentUrl) }
     var geminiApiKeyInput by remember { mutableStateOf(GeminiVisionService.effectiveApiKey) }
@@ -185,9 +182,9 @@ fun SettingsBottomSheet(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = if (currentUser.isSignedIn) "Signed in as ${currentUser.name}" else "Not signed in",
+                                    text = "Not signed in",
                                     fontSize = 11.sp,
-                                    color = if (currentUser.isSignedIn) AccentSuccess else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -201,42 +198,7 @@ fun SettingsBottomSheet(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.testTag("manage_paypal_account_button")
                         ) {
-                            Text(if (currentUser.isSignedIn) "Manage" else "Sign In", fontSize = 12.sp)
-                        }
-                    }
-
-                    if (currentUser.isSignedIn) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = currentUser.email,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = currentUser.linkedPaymentMethod,
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Text(
-                                    text = currentUser.balance,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = PayPalNavy
-                                )
-                            }
+                            Text("Sign In", fontSize = 12.sp)
                         }
                     }
                 }

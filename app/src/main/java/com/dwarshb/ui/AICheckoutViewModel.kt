@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dwarshb.ai.GeminiAnalysisResult
 import com.dwarshb.ai.GeminiVisionService
-import com.dwarshb.auth.PayPalAuthManager
 import com.dwarshb.data.OrderHistoryRepository
 import com.dwarshb.data.OrderRecord
 import com.dwarshb.network.Channel3Offer
@@ -259,15 +258,12 @@ class AICheckoutViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = AICheckoutUiState.ExecutingPayment
             try {
-                val currentUser = PayPalAuthManager.currentUser.value
-                val payerEmail = if (currentUser.isSignedIn) currentUser.email else "alex.miller-buyer@sandbox.paypal.com"
 
                 val response = NetworkClient.api.executePayment(
                     mapOf(
                         "productId" to productId,
                         "productTitle" to currentProduct.title,
                         "price" to currentProduct.price,
-                        "payerEmail" to payerEmail
                     )
                 )
 
@@ -320,14 +316,11 @@ class AICheckoutViewModel : ViewModel() {
 
                 if (response.status == "COMPLETED" && !response.captureId.isNullOrBlank()) {
                     val transactionId = response.captureId
-                    val user = PayPalAuthManager.currentUser.value
-                    val payerDescription = if (user.isSignedIn) "PayPal (${user.name})" else "PayPal Sandbox"
-
                     val record = OrderRecord(
                         orderId = transactionId,
                         product = currentProduct,
                         status = "COMPLETED",
-                        paymentMethod = payerDescription
+                        paymentMethod = "PayPal Sandbox"
                     )
                     OrderHistoryRepository.addOrder(record)
 

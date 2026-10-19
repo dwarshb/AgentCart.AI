@@ -93,13 +93,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
-import com.dwarshb.auth.PayPalAuthManager
 import com.dwarshb.network.DiscoveredProduct
 import com.dwarshb.ui.AICheckoutUiState
 import com.dwarshb.ui.AICheckoutViewModel
 import com.dwarshb.ui.components.CameraScannerView
 import com.dwarshb.ui.components.OrderHistoryBottomSheet
-import com.dwarshb.ui.components.PayPalSignInBottomSheet
 import com.dwarshb.ui.components.SettingsBottomSheet
 import com.dwarshb.ui.theme.AccentError
 import com.dwarshb.ui.theme.AccentSuccess
@@ -158,7 +156,6 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
     var showHistorySheet by remember { mutableStateOf(false) }
     var showPayPalSignInSheet by remember { mutableStateOf(false) }
 
-    val currentUser by PayPalAuthManager.currentUser.collectAsState()
 
     // Fallback confirmation dialog if biometric hardware unavailable on emulator
     var showBiometricFallbackDialog by remember { mutableStateOf<DiscoveredProduct?>(null) }
@@ -166,7 +163,6 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        PayPalAuthManager.init(context)
         viewModel.refreshGeminiStatus()
     }
 
@@ -222,43 +218,6 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                     }
                 },
                 actions = {
-                    // PayPal Sign-In / Account pill
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (currentUser.isSignedIn) PayPalNavy.copy(alpha = 0.08f) else PayPalNavy,
-                        modifier = Modifier
-                            .padding(end = 4.dp)
-                            .clickable { showPayPalSignInSheet = true }
-                            .testTag("action_paypal_signin_button")
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = if (currentUser.isSignedIn) PayPalNavy else PayPalGold,
-                                modifier = Modifier.size(18.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = "P",
-                                        color = if (currentUser.isSignedIn) PayPalGold else PayPalNavy,
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (currentUser.isSignedIn) currentUser.name.substringBefore(" ") else "PayPal Sign In",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (currentUser.isSignedIn) PayPalNavy else Color.White
-                            )
-                        }
-                    }
-
                     IconButton(
                         onClick = { showHistorySheet = true },
                         modifier = Modifier.testTag("action_history_button")
@@ -461,11 +420,6 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
         )
     }
 
-    if (showPayPalSignInSheet) {
-        PayPalSignInBottomSheet(
-            onDismiss = { showPayPalSignInSheet = false }
-        )
-    }
 
     if (showHistorySheet) {
         OrderHistoryBottomSheet(
@@ -833,7 +787,6 @@ fun ReviewMatchScreen(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            val currentUser by PayPalAuthManager.currentUser.collectAsState()
 
             // PayPal Connected Account Bar
             Surface(
@@ -863,20 +816,20 @@ fun ReviewMatchScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = if (currentUser.isSignedIn) "Paying as ${currentUser.name}" else "Sign In with PayPal",
+                                text = "Sign In with PayPal",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = PayPalNavy
                             )
                             Text(
-                                text = if (currentUser.isSignedIn) "${currentUser.email} • 1-Click Ready" else "Tap to connect your PayPal Sandbox account",
+                                text =  "Tap to connect your PayPal Sandbox account",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                     Text(
-                        text = if (currentUser.isSignedIn) "Change" else "Sign In",
+                        text = "Sign In",
                         fontSize = 12.sp,
                         color = PayPalBlue,
                         fontWeight = FontWeight.Bold
@@ -901,7 +854,7 @@ fun ReviewMatchScreen(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = if (currentUser.isSignedIn) "1-Click Pay with PayPal" else "Pay with PayPal",
+                    text = "Pay with PayPal",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = Color.White
