@@ -68,6 +68,22 @@ class AICheckoutViewModel : ViewModel() {
     )
     val geminiInfo: StateFlow<GeminiModelInfo> = _geminiInfo.asStateFlow()
 
+    private val _showA2UISheet = MutableStateFlow(false)
+    val showA2UISheet: StateFlow<Boolean> = _showA2UISheet.asStateFlow()
+
+    private val _a2uiInitialQuery = MutableStateFlow<String?>(null)
+    val a2uiInitialQuery: StateFlow<String?> = _a2uiInitialQuery.asStateFlow()
+
+    fun openA2UIAssistant(initialQuery: String? = null) {
+        _a2uiInitialQuery.value = initialQuery
+        _showA2UISheet.value = true
+    }
+
+    fun closeA2UIAssistant() {
+        _showA2UISheet.value = false
+        _a2uiInitialQuery.value = null
+    }
+
     fun refreshGeminiStatus() {
         _geminiInfo.value = GeminiModelInfo(
             modelName = "gemini-3.5-flash",

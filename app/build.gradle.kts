@@ -13,7 +13,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.dwarshb.agentcart"
+    applicationId = "com.adshackathon.team02"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -113,6 +113,8 @@ dependencies {
   implementation(libs.androidx.camera.lifecycle)
   implementation(libs.androidx.camera.view)
   implementation(libs.androidx.biometric)
+  implementation("androidx.appfunctions:appfunctions:1.0.0-alpha06")
+  implementation("androidx.appfunctions:appfunctions-service:1.0.0-alpha06")
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)

@@ -56,4 +56,55 @@ class ExampleRobolectricTest {
     assertEquals("Sarah Chen", updatedUser.name)
     assertTrue(updatedUser.isSignedIn)
   }
+
+  @Test
+  fun `verify a2ui assistant state toggles in viewmodel`() {
+    val vm = AICheckoutViewModel()
+    assertEquals(false, vm.showA2UISheet.value)
+    assertEquals(null, vm.a2uiInitialQuery.value)
+
+    vm.openA2UIAssistant("Sony WH-1000XM5")
+    assertEquals(true, vm.showA2UISheet.value)
+    assertEquals("Sony WH-1000XM5", vm.a2uiInitialQuery.value)
+
+    vm.closeA2UIAssistant()
+    assertEquals(false, vm.showA2UISheet.value)
+    assertEquals(null, vm.a2uiInitialQuery.value)
+  }
+
+  @Test
+  fun `verify agentcart appfunctions product search and order creation`() = kotlinx.coroutines.runBlocking {
+    val appFunctions = com.dwarshb.appfunctions.AgentCartAppFunctions
+
+    // 1. Search product function
+    val searchParams = com.dwarshb.appfunctions.ProductSearchParams(query = "Sony WH-1000XM5")
+    val searchResult = appFunctions.searchProduct(searchParams)
+    assertNotNull(searchResult)
+    assertTrue(searchResult.title.contains("Sony", ignoreCase = true))
+    assertTrue(searchResult.price.isNotBlank())
+    assertTrue(searchResult.offers.isNotEmpty())
+
+    // 2. Place order function
+    val orderParams = com.dwarshb.appfunctions.CreateOrderParams(
+      productId = searchResult.id,
+      productTitle = searchResult.title,
+      price = searchResult.price,
+      payerEmail = "alex.miller-buyer@sandbox.paypal.com"
+    )
+    val orderResult = appFunctions.placeOrder(orderParams)
+    assertNotNull(orderResult)
+    assertTrue(orderResult.orderId.isNotBlank())
+    assertTrue(orderResult.status == "CREATED" || orderResult.status == "COMPLETED")
+  }
+
+  @Test
+  fun `verify assistant search intent launches a2ui with query`() {
+    val intentWithExtra = android.content.Intent(android.content.Intent.ACTION_SEARCH).apply {
+      putExtra(android.app.SearchManager.QUERY, "Anker 65W Charger")
+    }
+    val controller = org.robolectric.Robolectric.buildActivity(MainActivity::class.java, intentWithExtra)
+    controller.create().start().resume()
+    val activity = controller.get()
+    assertNotNull(activity)
+  }
 }

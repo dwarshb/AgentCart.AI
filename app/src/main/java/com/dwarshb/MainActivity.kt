@@ -1,8 +1,10 @@
 package com.dwarshb
 
+import android.app.SearchManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -93,11 +95,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import com.dwarshb.auth.PayPalAuthManager
 import com.dwarshb.network.DiscoveredProduct
 import com.dwarshb.ui.AICheckoutUiState
 import com.dwarshb.ui.AICheckoutViewModel
+import com.dwarshb.ui.components.A2UIAssistantBottomSheet
 import com.dwarshb.ui.components.CameraScannerView
 import com.dwarshb.ui.components.OrderHistoryBottomSheet
+import com.dwarshb.ui.components.PayPalSignInBottomSheet
 import com.dwarshb.ui.components.SettingsBottomSheet
 import com.dwarshb.ui.theme.AccentError
 import com.dwarshb.ui.theme.AccentSuccess
@@ -119,30 +124,103 @@ class MainActivity : FragmentActivity() {
                 MainAgentWorkflowScreen(viewModel = viewModel, activity = this)
             }
         }
-        handlePayPalIntent(intent)
+        handleIncomingIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handlePayPalIntent(intent)
+        handleIncomingIntent(intent)
     }
 
-    private fun handlePayPalIntent(intent: Intent?) {
-        val uri = intent?.data ?: return
-        if (uri.scheme == "agentcart" && uri.host == "paypal") {
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+        Log.d("MainActivity", "handleIncomingIntent action=${intent.action} data=${intent.data} extras=${intent.extras?.keySet()}")
+
+        // 1. Check for PayPal OAuth & capture callbacks
+        val uri = intent.data
+        if (uri != null && uri.scheme == "agentcart" && uri.host == "paypal") {
             when (uri.path) {
                 "/return" -> {
                     val orderId = uri.getQueryParameter("token")
                     if (!orderId.isNullOrBlank()) {
                         viewModel.capturePayPalPayment(orderId)
+                        return
                     }
                 }
                 "/cancel" -> {
                     viewModel.paypalCancelled()
+                    return
                 }
             }
         }
+
+        // 2. Extract search query from all possible Assistant & System intent sources
+        val query = extractSearchQuery(intent)
+        if (!query.isNullOrBlank()) {
+            Log.d("MainActivity", "Successfully resolved voice/assistant query: $query")
+            viewModel.openA2UIAssistant(query)
+            return
+        }
+
+        // 3. Handle general A2UI launch requests without query
+        if (uri != null && uri.scheme == "agentcart" && uri.host == "a2ui") {
+            viewModel.openA2UIAssistant(null)
+            return
+        }
+        val featureExtra = intent.getStringExtra("feature")
+        if (featureExtra != null && featureExtra.contains("a2ui", ignoreCase = true)) {
+            viewModel.openA2UIAssistant(null)
+            return
+        }
+    }
+
+    private fun extractSearchQuery(intent: Intent): String? {
+        // A. Google Assistant / System Search query extras
+        val queryFromSearchManager = intent.getStringExtra(SearchManager.QUERY)
+        if (!queryFromSearchManager.isNullOrBlank()) return queryFromSearchManager.trim()
+
+        val queryFromQueryExtra = intent.getStringExtra("query")
+        if (!queryFromQueryExtra.isNullOrBlank()) return queryFromQueryExtra.trim()
+
+        val queryFromQExtra = intent.getStringExtra("q")
+        if (!queryFromQExtra.isNullOrBlank()) return queryFromQExtra.trim()
+
+        // B. Assistant App Actions parameters (from shortcuts.xml actions.intent.GET_PRODUCT / GET_THING)
+        val queryFromProductName = intent.getStringExtra("product.name")
+        if (!queryFromProductName.isNullOrBlank()) return queryFromProductName.trim()
+
+        val queryFromThingName = intent.getStringExtra("thing.name")
+        if (!queryFromThingName.isNullOrBlank()) return queryFromThingName.trim()
+
+        val queryFromProduct = intent.getStringExtra("product")
+        if (!queryFromProduct.isNullOrBlank()) return queryFromProduct.trim()
+
+        val queryFromUserQuery = intent.getStringExtra(SearchManager.USER_QUERY)
+        if (!queryFromUserQuery.isNullOrBlank()) return queryFromUserQuery.trim()
+
+        val queryFromExtraText = intent.getStringExtra(Intent.EXTRA_TEXT)
+        if (!queryFromExtraText.isNullOrBlank()) return queryFromExtraText.trim()
+
+        // C. Data URI queries (agentcart://search?query=... or https://agentcart.com/search?query=...)
+        val uri = intent.data ?: return null
+        val queryFromUri = uri.getQueryParameter("query")
+            ?: uri.getQueryParameter("q")
+            ?: uri.getQueryParameter("product")
+            ?: uri.getQueryParameter("product.name")
+            ?: uri.getQueryParameter("thing.name")
+        if (!queryFromUri.isNullOrBlank()) return queryFromUri.trim()
+
+        // Path segment support: e.g. /search/Sony+Headphones
+        val path = uri.path
+        if (path != null && (path.startsWith("/search/") || uri.host == "search")) {
+            val segment = uri.lastPathSegment
+            if (!segment.isNullOrBlank() && segment != "search") {
+                return Uri.decode(segment).trim()
+            }
+        }
+
+        return null
     }
 }
 
@@ -156,6 +234,7 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
     var showHistorySheet by remember { mutableStateOf(false) }
     var showPayPalSignInSheet by remember { mutableStateOf(false) }
 
+    val currentUser by PayPalAuthManager.currentUser.collectAsState()
 
     // Fallback confirmation dialog if biometric hardware unavailable on emulator
     var showBiometricFallbackDialog by remember { mutableStateOf<DiscoveredProduct?>(null) }
@@ -163,6 +242,7 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
+        PayPalAuthManager.init(context)
         viewModel.refreshGeminiStatus()
     }
 
@@ -218,6 +298,72 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                     }
                 },
                 actions = {
+                    // Gemini A2UI button
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = PayPalNavy.copy(alpha = 0.08f),
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .clickable { viewModel.openA2UIAssistant() }
+                            .testTag("action_a2ui_button")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = "Gemini A2UI Assistant",
+                                tint = PayPalNavy,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "A2UI",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PayPalNavy
+                            )
+                        }
+                    }
+
+                    // PayPal Sign-In / Account pill
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (currentUser.isSignedIn) PayPalNavy.copy(alpha = 0.08f) else PayPalNavy,
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .clickable { showPayPalSignInSheet = true }
+                            .testTag("action_paypal_signin_button")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = if (currentUser.isSignedIn) PayPalNavy else PayPalGold,
+                                modifier = Modifier.size(18.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "P",
+                                        color = if (currentUser.isSignedIn) PayPalGold else PayPalNavy,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (currentUser.isSignedIn) currentUser.name.substringBefore(" ") else "PayPal Sign In",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (currentUser.isSignedIn) PayPalNavy else Color.White
+                            )
+                        }
+                    }
+
                     IconButton(
                         onClick = { showHistorySheet = true },
                         modifier = Modifier.testTag("action_history_button")
@@ -265,6 +411,9 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
                             },
                             onTextSubmitted = { query ->
                                 viewModel.analyzeTextWithAIAgent(query)
+                            },
+                            onOpenA2UI = {
+                                viewModel.openA2UIAssistant()
                             },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -420,10 +569,29 @@ fun MainAgentWorkflowScreen(viewModel: AICheckoutViewModel, activity: FragmentAc
         )
     }
 
+    if (showPayPalSignInSheet) {
+        PayPalSignInBottomSheet(
+            onDismiss = { showPayPalSignInSheet = false }
+        )
+    }
 
     if (showHistorySheet) {
         OrderHistoryBottomSheet(
             onDismiss = { showHistorySheet = false }
+        )
+    }
+
+    val showA2UISheet by viewModel.showA2UISheet.collectAsState()
+    val a2uiQuery by viewModel.a2uiInitialQuery.collectAsState()
+
+    if (showA2UISheet) {
+        A2UIAssistantBottomSheet(
+            initialQuery = a2uiQuery,
+            onDismiss = { viewModel.closeA2UIAssistant() },
+            onOrderPlaced = { approvalUrl ->
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(approvalUrl))
+                context.startActivity(intent)
+            }
         )
     }
 }
@@ -787,6 +955,7 @@ fun ReviewMatchScreen(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
+            val currentUser by PayPalAuthManager.currentUser.collectAsState()
 
             // PayPal Connected Account Bar
             Surface(
@@ -816,20 +985,20 @@ fun ReviewMatchScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Sign In with PayPal",
+                                text = if (currentUser.isSignedIn) "Paying as ${currentUser.name}" else "Sign In with PayPal",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = PayPalNavy
                             )
                             Text(
-                                text =  "Tap to connect your PayPal Sandbox account",
+                                text = if (currentUser.isSignedIn) "${currentUser.email} • 1-Click Ready" else "Tap to connect your PayPal Sandbox account",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                     Text(
-                        text = "Sign In",
+                        text = if (currentUser.isSignedIn) "Change" else "Sign In",
                         fontSize = 12.sp,
                         color = PayPalBlue,
                         fontWeight = FontWeight.Bold
@@ -854,7 +1023,7 @@ fun ReviewMatchScreen(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Pay with PayPal",
+                    text = if (currentUser.isSignedIn) "1-Click Pay with PayPal" else "Pay with PayPal",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = Color.White

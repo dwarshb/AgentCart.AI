@@ -102,6 +102,7 @@ import java.io.File
 fun CameraScannerView(
     onImageCaptured: (ByteArray) -> Unit,
     onTextSubmitted: (String) -> Unit,
+    onOpenA2UI: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -212,7 +213,78 @@ fun CameraScannerView(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (onOpenA2UI != null) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = PayPalNavy.copy(alpha = 0.07f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenA2UI() }
+                    .testTag("banner_open_a2ui_assistant")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = PayPalNavy,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = com.dwarshb.ui.theme.PayPalGold,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Ask Gemini A2UI",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PayPalNavy
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = PayPalBlue
+                                ) {
+                                    Text(
+                                        text = "AppFunctions",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Find any product & place orders directly via Channel3",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Open ✨",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PayPalBlue
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         // Dual Mode Tabs: Visual Scanner vs Type Product Details
         TabRow(

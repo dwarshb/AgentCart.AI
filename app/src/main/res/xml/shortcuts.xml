@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Google Assistant: Search for a product -->
+    <capability android:name="actions.intent.GET_PRODUCT">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.dwarshb.agentcart"
+            android:targetClass="com.dwarshb.MainActivity"
+            android:data="agentcart://search?query={query}">
+            <parameter
+                android:name="product.name"
+                android:key="query" />
+        </intent>
+    </capability>
+
+    <!-- Google Assistant: Generic search for item / thing -->
+    <capability android:name="actions.intent.GET_THING">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.dwarshb.agentcart"
+            android:targetClass="com.dwarshb.MainActivity"
+            android:data="agentcart://search?query={query}">
+            <parameter
+                android:name="thing.name"
+                android:key="query" />
+        </intent>
+    </capability>
+
+    <!-- Google Assistant: Open A2UI or specific feature -->
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.dwarshb.agentcart"
+            android:targetClass="com.dwarshb.MainActivity"
+            android:data="agentcart://a2ui">
+            <parameter
+                android:name="feature"
+                android:key="feature" />
+        </intent>
+    </capability>
+</shortcuts>

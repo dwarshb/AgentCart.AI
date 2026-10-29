@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:description="AgentCart AI Commerce: Use searchProduct to discover retail merchandise and live merchant pricing via Channel3 API. Use placeOrder to authorize 1-click PayPal transactions."
+    appfn:displayDescription="@string/app_name" />

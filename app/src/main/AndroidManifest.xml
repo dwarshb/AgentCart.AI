@@ -29,6 +29,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
              <!-- PayPal return URL -->
     <intent-filter>
         <action android:name="android.intent.action.VIEW" />
@@ -42,19 +46,79 @@
             android:pathPrefix="/return" />
     </intent-filter>
 
-    <!-- PayPal cancellation URL -->
-    <intent-filter>
-        <action android:name="android.intent.action.VIEW" />
+        <!-- PayPal cancellation URL -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
 
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
 
-        <data
-            android:scheme="agentcart"
-            android:host="paypal"
-            android:pathPrefix="/cancel" />
-    </intent-filter>
+            <data
+                android:scheme="agentcart"
+                android:host="paypal"
+                android:pathPrefix="/cancel" />
+        </intent-filter>
+
+        <!-- Gemini A2UI & Assistant Deep Links -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+
+            <data
+                android:scheme="agentcart"
+                android:host="a2ui" />
+        </intent-filter>
+
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+
+            <data
+                android:scheme="agentcart"
+                android:host="search" />
+        </intent-filter>
+
+        <!-- Google Assistant & System Voice Search -->
+        <intent-filter>
+            <action android:name="android.intent.action.SEARCH" />
+            <action android:name="android.intent.action.WEB_SEARCH" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.VOICE" />
+        </intent-filter>
+
+        <!-- Assistant App Actions Built-In Intents -->
+        <intent-filter>
+            <action android:name="actions.intent.GET_PRODUCT" />
+            <action android:name="actions.intent.GET_THING" />
+            <category android:name="android.intent.category.DEFAULT" />
+        </intent-filter>
+
+        <!-- Standard Web App Link format -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" android:host="agentcart.com" android:pathPrefix="/search" />
+            <data android:scheme="http" android:host="agentcart.com" android:pathPrefix="/search" />
+        </intent-filter>
         </activity>
+
+        <!-- Android AppFunctions Service for Gemini and Assistant Orchestration -->
+        <service
+            android:name=".appfunctions.AgentCartAppFunctionService"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+            <property
+                android:name="android.app.appfunctions.app_metadata"
+                android:resource="@xml/app_metadata" />
+        </service>
     </application>
 
 </manifest>
